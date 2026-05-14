@@ -1,0 +1,7 @@
+{
+    "participants": ["Renato Vico"],
+    "social": ["https://github.com/renatovico"],
+    "source-code-repo": "https://github.com/renatovico/rinha-de-backend-2026-elixir",
+    "stack": ["elixir", "phoenix", "nginx", "docker"],
+    "open_to_work": false
+}

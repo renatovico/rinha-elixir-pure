@@ -1,0 +1,40 @@
+## Distributed Erlang
+## Node name comes from RELEASE_NODE env (set by docker-compose).  We do
+## NOT hardcode -name here so the same release works as both api1@api1
+## and api2@api2.
+-setcookie <%= @release.cookie %>
+
+## Scheduler config — pin to allotted CPUs (compose gives 2 cores via cpuset).
++S 2:2
++sbt tnnps
++sbwt none
++sbwtdcpu none
++sbwtdio none
++sub false
++scl false
++SDio 4
+
+## Memory + GC — reduce footprint inside the 160 MB cgroup.
+## - aobf (address-order best-fit) reduces fragmentation when we hold one
+##   huge 99 MB binary in :persistent_term + many tiny request binaries.
++MBas aobf
++MHas aobf
++MMscs 8
++MMsco false
+
+## Async-IO threads — pure Elixir KNN doesn't use file IO; cowboy uses
+## dirty-IO scheds.
++A 4
+
+## Distribution buffer — small messages (16-int query, top-K reply).
++zdbbl 8192
+
+## Process / port ceilings.
++P 1048576
++Q 65536
+
+## Default unicode (Phoenix/JSON).
++pc unicode
+
+## Kernel poll for cowboy sockets.
++K true

@@ -1,0 +1,133 @@
+x-sysctls: &sysctls
+  net.core.somaxconn: 16384
+  net.ipv4.tcp_max_syn_backlog: 16384
+  net.ipv4.tcp_fin_timeout: 15
+  net.ipv4.tcp_keepalive_time: 300
+  net.ipv4.tcp_keepalive_intvl: 10
+  net.ipv4.tcp_keepalive_probes: 5
+  net.ipv4.tcp_max_tw_buckets: 65536
+  net.ipv4.ip_local_port_range: 1024 65535
+  net.ipv4.tcp_tw_reuse: 1
+  net.ipv4.tcp_fastopen: 3
+  net.ipv4.tcp_syncookies: 1
+  net.ipv4.tcp_synack_retries: 2
+
+x-ulimits: &ulimits
+  nofile:
+    soft: 65536
+    hard: 65536
+
+x-api: &api
+  build: .
+  image: renatoelias/rinha-elixir:latest
+  volumes:
+    - sock:/run/sock
+    # Bind-mount the references binary read-only so it isn't baked into
+    # the image and the same on-disk file is shared across instances.
+    - ./priv/references_v2.bin:/app/references_v2.bin:ro
+    - ./priv/ivf_index.bin:/app/ivf_index.bin:ro
+  environment:
+    REFERENCES_V2_PATH: /app/references_v2.bin
+    IVF_INDEX_PATH: /app/ivf_index.bin
+    READY_FILE: /tmp/ready
+    ERL_CRASH_DUMP_SECONDS: "0"
+    HTTP_ACCEPTORS: "32"
+    HTTP_MAX_CONNECTIONS: "8192"
+    RELEASE_DISTRIBUTION: sname
+    RELEASE_COOKIE: rinha-secret-cookie
+  healthcheck:
+    test: ["CMD-SHELL", "test -f /tmp/ready"]
+    interval: 2s
+    timeout: 2s
+    retries: 60
+    start_period: 5s
+  ulimits: *ulimits
+  sysctls: *sysctls
+  networks:
+    - net
+
+services:
+  api1:
+    <<: *api
+    container_name: rinha_api1
+    hostname: api1
+    environment:
+      REFERENCES_V2_PATH: /app/references_v2.bin
+      IVF_INDEX_PATH: /app/ivf_index.bin
+      READY_FILE: /tmp/ready
+      ERL_CRASH_DUMP_SECONDS: "0"
+      HTTP_ACCEPTORS: "32"
+      HTTP_MAX_CONNECTIONS: "8192"
+      SOCKET_PATH: /run/sock/api1.sock
+      RELEASE_DISTRIBUTION: sname
+      RELEASE_NODE: api1
+      RELEASE_COOKIE: rinha-secret-cookie
+      RINHA_PEER_NODE: api2@api2
+    cpuset: "0,1"
+    deploy:
+      resources:
+        limits:
+          # Rinha 2026 budget: 1.0 CPU + 350 MB total.
+          # api1 = 0.45 CPU / 160 MB, api2 = 0.45 / 160, nginx = 0.10 / 30
+          # → 1.00 CPU / 350 MB.
+          cpus: "0.45"
+          memory: "160M"
+
+  api2:
+    <<: *api
+    container_name: rinha_api2
+    hostname: api2
+    environment:
+      REFERENCES_V2_PATH: /app/references_v2.bin
+      IVF_INDEX_PATH: /app/ivf_index.bin
+      READY_FILE: /tmp/ready
+      ERL_CRASH_DUMP_SECONDS: "0"
+      HTTP_ACCEPTORS: "32"
+      HTTP_MAX_CONNECTIONS: "8192"
+      SOCKET_PATH: /run/sock/api2.sock
+      RELEASE_DISTRIBUTION: sname
+      RELEASE_NODE: api2
+      RELEASE_COOKIE: rinha-secret-cookie
+      RINHA_PEER_NODE: api1@api1
+    cpuset: "2,3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.45"
+          memory: "160M"
+
+  nginx:
+    image: nginx:alpine
+    container_name: rinha_nginx
+    ports:
+      - "9999:9999"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - sock:/run/sock
+    depends_on:
+      api1:
+        condition: service_healthy
+      api2:
+        condition: service_healthy
+    networks:
+      - net
+    cpuset: "0,2"
+    ulimits: *ulimits
+    sysctls: *sysctls
+    deploy:
+      resources:
+        limits:
+          cpus: "0.10"
+          memory: "30M"
+
+networks:
+  net:
+    driver: bridge
+
+volumes:
+  sock:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=4m,mode=0777"

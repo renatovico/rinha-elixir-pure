@@ -66,18 +66,17 @@ WORKDIR /app
 
 COPY --from=builder /app/_build/prod/rel/rinha ./
 
-# References + IVF index are bind-mounted at /app/{references_v2,ivf_index}.bin
-# by docker-compose so the same files are shared between api1 and api2 with a
-# single on-disk copy. If you run this image standalone, pass:
-#   -v ./priv/references_v2.bin:/app/references_v2.bin:ro
+# The release bundles priv/ivf_index.bin (~94 MB) directly. IvfStore
+# auto-resolves the path via :code.priv_dir(:rinha) when IVF_INDEX_PATH
+# is unset. To override (e.g. bind-mount a freshly retrained index from
+# the host without rebuilding the image), pass:
+#   -e IVF_INDEX_PATH=/app/ivf_index.bin
 #   -v ./priv/ivf_index.bin:/app/ivf_index.bin:ro
 
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 ENV PORT=4000 \
-    REFERENCES_V2_PATH=/app/references_v2.bin \
-    IVF_INDEX_PATH=/app/ivf_index.bin \
     READY_FILE=/tmp/ready \
     RELEASE_DISTRIBUTION=sname
 

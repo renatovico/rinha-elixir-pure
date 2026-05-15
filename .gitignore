@@ -22,11 +22,13 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 rinha-*.tar
 
-# Generated reference / IVF binaries (rebuilt via `make preprocess` /
-# `make ivf-index`). priv/resources/*.json are NOT ignored — those are
-# the runtime configs (mcc_risk, normalization) and warmup fixtures.
+# Brute-force oracle binary (~94 MB) used only by `mix rinha.bench`.
+# Rebuilt via `make preprocess` from priv/resources/references.json.gz.
 /priv/references_v2.bin
-/priv/ivf_index.bin
+
+# IVF index (~94 MB) is required at runtime, so we DO track it.
+# Rebuild via `make ivf-index`.
+# /priv/ivf_index.bin   (intentionally NOT ignored)
 
 # Source dataset (~48 MB) — pulled from the official Rinha 2026 repo;
 # not tracked here.

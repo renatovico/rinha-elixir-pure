@@ -22,13 +22,12 @@ x-api: &api
   image: renatoelias/rinha-elixir:latest
   volumes:
     - sock:/run/sock
-    # Bind-mount the references binary read-only so it isn't baked into
-    # the image and the same on-disk file is shared across instances.
-    - ./priv/references_v2.bin:/app/references_v2.bin:ro
-    - ./priv/ivf_index.bin:/app/ivf_index.bin:ro
+    # IVF index (~94 MB) is bundled inside the image at
+    # /app/lib/rinha-*/priv/ivf_index.bin and resolved via
+    # :code.priv_dir(:rinha). To override it without rebuilding the
+    # image, set IVF_INDEX_PATH and bind-mount the file, e.g.:
+    #   - ./priv/ivf_index.bin:/app/ivf_index.bin:ro
   environment:
-    REFERENCES_V2_PATH: /app/references_v2.bin
-    IVF_INDEX_PATH: /app/ivf_index.bin
     READY_FILE: /tmp/ready
     ERL_CRASH_DUMP_SECONDS: "0"
     HTTP_ACCEPTORS: "32"
@@ -52,8 +51,6 @@ services:
     container_name: rinha_api1
     hostname: api1
     environment:
-      REFERENCES_V2_PATH: /app/references_v2.bin
-      IVF_INDEX_PATH: /app/ivf_index.bin
       READY_FILE: /tmp/ready
       ERL_CRASH_DUMP_SECONDS: "0"
       HTTP_ACCEPTORS: "32"
@@ -78,8 +75,6 @@ services:
     container_name: rinha_api2
     hostname: api2
     environment:
-      REFERENCES_V2_PATH: /app/references_v2.bin
-      IVF_INDEX_PATH: /app/ivf_index.bin
       READY_FILE: /tmp/ready
       ERL_CRASH_DUMP_SECONDS: "0"
       HTTP_ACCEPTORS: "32"

@@ -171,14 +171,14 @@ defmodule Rinha.IvfScanner do
     init = List.duplicate({@big_dist, -1}, p)
 
     centroid_loop(
-      centroids, 0, init,
+      centroids, 0, init, @big_dist,
       q0, q1, q2, q3, q4, q5, q6, q7,
       q8, q9, q10, q11, q12, q13, q14, q15
     )
     |> Enum.map(fn {_d, cid} -> cid end)
   end
 
-  defp centroid_loop(<<>>, _i, topk, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _),
+  defp centroid_loop(<<>>, _i, topk, _wd, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _),
     do: topk
 
   defp centroid_loop(
@@ -190,6 +190,7 @@ defmodule Rinha.IvfScanner do
            r15::little-signed-16, rest::binary>>,
          i,
          topk,
+         worst_dist,
          q0, q1, q2, q3, q4, q5, q6, q7,
          q8, q9, q10, q11, q12, q13, q14, q15
        ) do
@@ -216,22 +217,21 @@ defmodule Rinha.IvfScanner do
         d8 * d8 + d9 * d9 + d10 * d10 + d11 * d11 +
         d12 * d12 + d13 * d13 + d14 * d14 + d15 * d15
 
-    new_topk = maybe_insert(topk, dist, i)
-
-    centroid_loop(
-      rest, i + 1, new_topk,
-      q0, q1, q2, q3, q4, q5, q6, q7,
-      q8, q9, q10, q11, q12, q13, q14, q15
-    )
-  end
-
-  defp maybe_insert(topk, dist, cid) do
-    {worst_dist, _} = :lists.last(topk)
-
     if dist < worst_dist do
-      insert_sorted(topk, {dist, cid}, [])
+      new_topk = insert_sorted(topk, {dist, i}, [])
+      {new_worst, _} = :lists.last(new_topk)
+
+      centroid_loop(
+        rest, i + 1, new_topk, new_worst,
+        q0, q1, q2, q3, q4, q5, q6, q7,
+        q8, q9, q10, q11, q12, q13, q14, q15
+      )
     else
-      topk
+      centroid_loop(
+        rest, i + 1, topk, worst_dist,
+        q0, q1, q2, q3, q4, q5, q6, q7,
+        q8, q9, q10, q11, q12, q13, q14, q15
+      )
     end
   end
 

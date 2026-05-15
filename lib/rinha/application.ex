@@ -47,16 +47,62 @@ defmodule Rinha.Application do
   defp warmup do
     fixtures_dir = Path.join([:code.priv_dir(:rinha), "resources", "fixtures"])
 
-    if File.dir?(fixtures_dir) do
-      for name <- ~w(legit fraud borderline) do
-        path = Path.join(fixtures_dir, "#{name}.json")
-
-        if File.exists?(path) do
-          payload = path |> File.read!() |> Jason.decode!()
-          vector = Rinha.VectorTransformerV2.transform(payload)
-          _ = Rinha.IvfScanner.score(vector)
+    fixture_vectors =
+      if File.dir?(fixtures_dir) do
+        for name <- ~w(legit fraud borderline),
+            path = Path.join(fixtures_dir, "#{name}.json"),
+            File.exists?(path) do
+          path
+          |> File.read!()
+          |> Jason.decode!()
+          |> Rinha.VectorTransformerV2.transform()
         end
+      else
+        []
       end
+
+    # Plus 200 synthetic queries derived from real refs in the index
+    # (sample one ref from each of 200 buckets, then perturb slightly
+    # to avoid trivial top-K hits). This JIT-warms the BEAM, primes
+    # caches and pre-allocates atoms / persistent_term shapes for the
+    # hot path before we accept traffic.
+    synthetic = synthetic_warmup_vectors(200)
+
+    vectors = fixture_vectors ++ synthetic
+
+    Enum.each(vectors, fn v ->
+      _ = Rinha.IvfScanner.score_adaptive(v)
+    end)
+
+    require Logger
+    Logger.info("Warmup done (#{length(vectors)} queries)")
+  end
+
+  defp synthetic_warmup_vectors(count) do
+    %{vectors: vectors, offsets: offsets, k: k, stride: stride} = Rinha.IvfStore.get()
+
+    step = max(1, div(k, count))
+
+    0..(k - 1)//step
+    |> Enum.flat_map(fn cid ->
+      case take_one(offsets, cid, vectors, stride) do
+        nil -> []
+        v -> [v]
+      end
+    end)
+    |> Enum.take(count)
+  end
+
+  defp take_one(offsets, cid, vectors, stride) do
+    start = elem(offsets, cid)
+    stop = elem(offsets, cid + 1)
+
+    if stop > start do
+      row_bin = :binary.part(vectors, start * stride * 2, stride * 2)
+
+      for <<v::little-signed-16 <- row_bin>>, do: v
+    else
+      nil
     end
   end
 

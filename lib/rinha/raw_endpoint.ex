@@ -25,7 +25,7 @@ defmodule Rinha.RawEndpoint do
       payload = decode!(body)
 
       vector = Rinha.VectorTransformerV2.transform(payload)
-      n = Rinha.IvfScanner.score(vector)
+      n = Rinha.IvfScanner.score_adaptive(vector)
       response = Rinha.FraudScorer.response_for(n)
 
       conn

@@ -81,7 +81,7 @@ defmodule Mix.Tasks.Rinha.Bench do
     )
 
     # IVF passes per probe count
-    results =
+    fixed_results =
       for p <- probes_list do
         Mix.shell().info("Running IVF P=#{p} (#{count} queries)...")
 
@@ -103,7 +103,7 @@ defmodule Mix.Tasks.Rinha.Bench do
         bucket_match = bucket_match(brute_results, ivf_results)
 
         %{
-          p: p,
+          label: "P=#{p}",
           recall: recall,
           bucket_match: bucket_match,
           mean_us: mean(us_list),
@@ -114,20 +114,49 @@ defmodule Mix.Tasks.Rinha.Bench do
         }
       end
 
+    # Adaptive pass (P=2 → P=3 escalation on disagreement, with 50ms budget)
+    Mix.shell().info("Running IVF adaptive (#{count} queries)...")
+
+    for {_label, vec} <- Enum.take(queries, 10) do
+      _ = Rinha.IvfScanner.score_adaptive(vec)
+    end
+
+    adaptive_latencies =
+      for {_label, vec} <- queries do
+        {us, n} = :timer.tc(fn -> Rinha.IvfScanner.score_adaptive(vec) end)
+        {us, n}
+      end
+
+    adaptive_ns = Enum.map(adaptive_latencies, fn {_us, n} -> n end)
+    adaptive_us = Enum.map(adaptive_latencies, fn {us, _n} -> us end)
+
+    adaptive_result = %{
+      label: "adaptive",
+      recall: recall(brute_results, adaptive_ns),
+      bucket_match: bucket_match(brute_results, adaptive_ns),
+      mean_us: mean(adaptive_us),
+      p50_us: percentile(adaptive_us, 0.50),
+      p95_us: percentile(adaptive_us, 0.95),
+      p99_us: percentile(adaptive_us, 0.99),
+      max_us: Enum.max(adaptive_us)
+    }
+
+    results = fixed_results ++ [adaptive_result]
+
     Mix.shell().info("\n=== Results ===\n")
     Mix.shell().info(
-      "  P  | recall | bucket | mean_us | p50  | p95   | p99   | max"
+      "  mode      | recall | bucket | mean_us | p50  | p95   | p99   | max"
     )
     Mix.shell().info(
-      "-----+--------+--------+---------+------+-------+-------+------"
+      "------------+--------+--------+---------+------+-------+-------+------"
     )
 
     for r <- results do
       Mix.shell().info(
         :io_lib.format(
-          "  ~3w | ~6.2f | ~6.2f | ~7w | ~4w | ~5w | ~5w | ~5w",
+          "  ~-9s | ~6.2f | ~6.2f | ~7w | ~4w | ~5w | ~5w | ~5w",
           [
-            r.p,
+            r.label,
             r.recall * 100,
             r.bucket_match * 100,
             r.mean_us,

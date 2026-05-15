@@ -1,2 +1,0 @@
-defmodule Rinha do
-end

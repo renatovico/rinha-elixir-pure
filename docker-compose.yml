@@ -19,7 +19,7 @@ x-ulimits: &ulimits
 
 x-api: &api
   build: .
-  image: renatoelias/rinha-elixir:latest
+  image: renatoelias/rinha-elixir-pure:latest
   volumes:
     - sock:/run/sock
     # IVF index (~94 MB) is bundled inside the image at
@@ -48,7 +48,7 @@ x-api: &api
 services:
   api1:
     <<: *api
-    container_name: rinha_api1
+    container_name: rinha_pure_api1
     hostname: api1
     environment:
       READY_FILE: /tmp/ready
@@ -72,7 +72,7 @@ services:
 
   api2:
     <<: *api
-    container_name: rinha_api2
+    container_name: rinha_pure_api2
     hostname: api2
     environment:
       READY_FILE: /tmp/ready
@@ -93,7 +93,7 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: rinha_nginx
+    container_name: rinha_pure_nginx
     ports:
       - "9999:9999"
     volumes:

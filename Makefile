@@ -6,7 +6,7 @@
 REFS_GZ   ?= priv/resources/references.json.gz
 REFS_BIN  := priv/references_v2.bin
 IVF_BIN   := priv/ivf_index.bin
-IMAGE     := renatoelias/rinha-elixir:latest
+IMAGE     := renatoelias/rinha-elixir-pure:latest
 BASE_URL  ?= http://localhost:4000
 CLUSTER_URL ?= http://localhost:9999
 
@@ -78,7 +78,7 @@ docker-down: ## Stop the cluster
 	docker compose down
 
 docker-stats: ## Live stats for the cluster
-	docker stats --no-stream rinha_api1 rinha_api2 rinha_nginx
+	docker stats --no-stream rinha_pure_api1 rinha_pure_api2 rinha_pure_nginx
 
 docker-logs: ## Follow logs for the cluster
 	docker compose logs -f --tail 100

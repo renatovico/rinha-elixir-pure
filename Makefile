@@ -35,7 +35,7 @@ preprocess: compile ## Generate priv/references_v2.bin from .json.gz
 		echo "Error: $(REFS_GZ) not found. Set REFS_GZ=path/to/references.json.gz"; \
 		exit 1; \
 	fi
-	mix run --no-start priv/build_references.exs $(REFS_GZ) $(REFS_BIN)
+	INPUT=$(REFS_GZ) OUTPUT=$(REFS_BIN) mix run --no-start priv/build_references.exs
 
 ivf-index: $(REFS_BIN) ## Build priv/ivf_index.bin (k-means K=$(IVF_K))
 	IVF_K=$(IVF_K) IVF_ITERS=$(IVF_ITERS) IVF_BATCH=$(IVF_BATCH) \

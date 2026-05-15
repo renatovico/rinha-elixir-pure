@@ -4,21 +4,25 @@
 # Reads:  priv/references_v2.bin   (3M × 16 :s16 + 3M :u8)
 # Writes: priv/ivf_index.bin
 #
-# Layout of priv/ivf_index.bin:
+# Layout of priv/ivf_index.bin (v2 with cached squared L2 norms):
 #
+#   <<magic::little-32 = 0xF2F1F0F2>>                     # 4 B
 #   <<K::little-32, N::little-32, stride::little-32>>     # 12 B header
 #   <<centroids::binary-K*16*int16-le>>                   # K * 32 B
-#   <<offsets::binary-(K+1)*int32-le>>                    # (K+1) * 4 B  (CSR)
-#   <<vectors::binary-N*16*int16-le>>                     # N * 32 B  (regrouped)
-#   <<labels::binary-N*int8>>                             # N B       (regrouped)
+#   <<centroid_norms::binary-K*int32-le>>                 # K * 4 B  (||c||^2)
+#   <<offsets::binary-(K+1)*int32-le>>                    # (K+1) * 4 B  CSR
+#   <<vectors::binary-N*16*int16-le>>                     # N * 32 B
+#   <<ref_norms::binary-N*int32-le>>                      # N * 4 B  (||r||^2)
+#   <<labels::binary-N*int8>>                             # N B
 #
-# K = 1024 centroids, ~3000 refs per bucket.
+# K = 2048 centroids, ~1500 refs per bucket. Norms tables add
+#   K*4 + N*4 = 8 KB + 12 MB = ~12 MB to the on-disk index.
 #
 # Usage:
 #   MIX_ENV=dev mix run priv/build_ivf_index.exs
 #
 # Tunables via env:
-#   IVF_K=1024               - number of centroids
+#   IVF_K=2048               - number of centroids
 #   IVF_ITERS=15             - k-means iterations
 #   IVF_BATCH=20000          - mini-batch size for centroid update
 
@@ -201,8 +205,27 @@ defmodule BuildIvf do
 
     centroids_s16 = Nx.as_type(centroids, :s16)
 
-    header = <<k::little-32, n::little-32, stride::little-32>>
+    # Squared L2 norms per row (s32). For centroids: ||c||^2.
+    # For refs: ||r||^2 in the regrouped order.
+    centroid_norms_t =
+      centroids
+      |> Nx.as_type(:s32)
+      |> Nx.multiply(Nx.as_type(centroids, :s32))
+      |> Nx.sum(axes: [1])
+      |> Nx.as_type(:s32)
+
+    ref_norms_t =
+      regrouped_vecs
+      |> Nx.as_type(:s32)
+      |> Nx.multiply(Nx.as_type(regrouped_vecs, :s32))
+      |> Nx.sum(axes: [1])
+      |> Nx.as_type(:s32)
+
+    magic = 0xF2F1F0F2
+    header = <<magic::little-32, k::little-32, n::little-32, stride::little-32>>
+
     centroids_bin = Nx.to_binary(centroids_s16)
+    centroid_norms_bin = Nx.to_binary(centroid_norms_t)
 
     offsets_bin =
       offsets
@@ -210,9 +233,18 @@ defmodule BuildIvf do
       |> IO.iodata_to_binary()
 
     vecs_bin = Nx.to_binary(regrouped_vecs)
+    ref_norms_bin = Nx.to_binary(ref_norms_t)
     labels_bin = Nx.to_binary(regrouped_labels)
 
-    File.write!(path, [header, centroids_bin, offsets_bin, vecs_bin, labels_bin])
+    File.write!(path, [
+      header,
+      centroids_bin,
+      centroid_norms_bin,
+      offsets_bin,
+      vecs_bin,
+      ref_norms_bin,
+      labels_bin
+    ])
   end
 
   defp bucket_size_stats(offsets, k) do

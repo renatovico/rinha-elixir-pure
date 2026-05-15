@@ -154,6 +154,14 @@ defmodule Rinha.IvfScanner do
   end
 
   # Scan all K centroids, return top-`p` indices (smallest distances).
+  #
+  # We tried a "cached norms" fast path (||q-c||^2 = ||q||^2 + ||c||^2 - 2*q·c
+  # with ||c||^2 precomputed). On paper it's fewer ops; in practice it's
+  # ~10% slower on the BEAM than the straight (q-c)^2 pattern below. The
+  # all-positive squared-sum pattern fits in small-int immediates and
+  # pipelines better through the JIT. We left the v2 norms in
+  # Rinha.IvfStore for future experimentation but the hot path uses the
+  # straight pattern.
   defp top_centroids(query, p) do
     centroids = Rinha.IvfStore.centroids()
 

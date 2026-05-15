@@ -37,6 +37,7 @@ defmodule Rinha.KnnScanner do
       vectors,
       labels,
       init_topk,
+      @big_dist,
       q0, q1, q2, q3, q4, q5, q6, q7,
       q8, q9, q10, q11, q12, q13, q14, q15
     )
@@ -60,6 +61,7 @@ defmodule Rinha.KnnScanner do
       vectors_slice,
       labels_slice,
       init_topk,
+      @big_dist,
       q0, q1, q2, q3, q4, q5, q6, q7,
       q8, q9, q10, q11, q12, q13, q14, q15
     )
@@ -88,7 +90,7 @@ defmodule Rinha.KnnScanner do
     do: raise("KnnScanner expects a 16-int query, got #{inspect(other)}")
 
   # End of binary: return current top-K.
-  defp scan_chunk(<<>>, <<>>, topk, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _),
+  defp scan_chunk(<<>>, <<>>, topk, _wd, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _),
     do: topk
 
   defp scan_chunk(
@@ -100,6 +102,7 @@ defmodule Rinha.KnnScanner do
            r15::little-signed-16, vrest::binary>>,
          <<label, lrest::binary>>,
          topk,
+         worst_dist,
          q0, q1, q2, q3, q4, q5, q6, q7,
          q8, q9, q10, q11, q12, q13, q14, q15
        ) do
@@ -126,24 +129,22 @@ defmodule Rinha.KnnScanner do
         d8 * d8 + d9 * d9 + d10 * d10 + d11 * d11 +
         d12 * d12 + d13 * d13 + d14 * d14 + d15 * d15
 
-    new_topk = maybe_insert(topk, dist, label)
-
-    scan_chunk(
-      vrest, lrest, new_topk,
-      q0, q1, q2, q3, q4, q5, q6, q7,
-      q8, q9, q10, q11, q12, q13, q14, q15
-    )
-  end
-
-  # Top-K is a sorted list (ascending). If the new distance is smaller
-  # than the worst (last) entry, splice it in keeping order.
-  defp maybe_insert(topk, dist, label) do
-    {worst_dist, _} = :lists.last(topk)
-
+    # Hot fast-path: if dist >= worst, skip insert entirely.
     if dist < worst_dist do
-      insert_sorted(topk, {dist, label}, [])
+      new_topk = insert_sorted(topk, {dist, label}, [])
+      {new_worst, _} = :lists.last(new_topk)
+
+      scan_chunk(
+        vrest, lrest, new_topk, new_worst,
+        q0, q1, q2, q3, q4, q5, q6, q7,
+        q8, q9, q10, q11, q12, q13, q14, q15
+      )
     else
-      topk
+      scan_chunk(
+        vrest, lrest, topk, worst_dist,
+        q0, q1, q2, q3, q4, q5, q6, q7,
+        q8, q9, q10, q11, q12, q13, q14, q15
+      )
     end
   end
 

@@ -33,7 +33,7 @@ defmodule Rinha.EndpointTest do
       :persistent_term.put(:rinha_ready, false)
 
       payload =
-        File.read!(Path.join([:code.priv_dir(:rinha), "fixtures", "legit.json"]))
+        File.read!(Path.join([:code.priv_dir(:rinha), "resources", "fixtures", "legit.json"]))
 
       conn =
         conn(:post, "/fraud-score", payload)
@@ -47,7 +47,7 @@ defmodule Rinha.EndpointTest do
       ensure_ready!()
 
       payload =
-        File.read!(Path.join([:code.priv_dir(:rinha), "fixtures", "legit.json"]))
+        File.read!(Path.join([:code.priv_dir(:rinha), "resources", "fixtures", "legit.json"]))
 
       conn =
         conn(:post, "/fraud-score", payload)
@@ -64,7 +64,7 @@ defmodule Rinha.EndpointTest do
       ensure_ready!()
 
       payload =
-        File.read!(Path.join([:code.priv_dir(:rinha), "fixtures", "fraud.json"]))
+        File.read!(Path.join([:code.priv_dir(:rinha), "resources", "fixtures", "fraud.json"]))
 
       conn =
         conn(:post, "/fraud-score", payload)

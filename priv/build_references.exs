@@ -1,4 +1,4 @@
-# Build references_v2.bin from resources/references.json.gz.
+# Build references_v2.bin from priv/resources/references.json.gz.
 #
 # K-means clustering uses Nx+EXLA for vectorized distance computation.
 #
@@ -24,7 +24,7 @@ defmodule BuildRefs do
   @dims 14
 
   def run(opts) do
-    in_path = Keyword.get(opts, :input, "resources/references.json.gz")
+    in_path = Keyword.get(opts, :input, "priv/resources/references.json.gz")
     out_path = Keyword.get(opts, :output, "priv/references_v2.bin")
     k = Keyword.get(opts, :k, 0)
     max_iters = Keyword.get(opts, :max_iters, 50)
@@ -206,7 +206,7 @@ iters =
     s -> String.to_integer(s)
   end
 
-input = System.get_env("INPUT") || "resources/references.json.gz"
+input = System.get_env("INPUT") || "priv/resources/references.json.gz"
 output = System.get_env("OUTPUT") || "priv/references_v2.bin"
 
 BuildRefs.run(input: input, output: output, k: k, max_iters: iters)

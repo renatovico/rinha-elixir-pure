@@ -17,7 +17,7 @@ defmodule Rinha.FraudSimulator do
     * legit  — small amount, few installments, business hours, near home,
                known merchant, balanced amounts.
 
-  The schema matches `priv/fixtures/*.json` exactly (camelCase nested,
+  The schema matches `priv/resources/fixtures/*.json` exactly (camelCase nested,
   ISO-8601 `requested_at`, optional `last_transaction`).
   """
 

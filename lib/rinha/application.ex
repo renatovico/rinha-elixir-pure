@@ -45,7 +45,7 @@ defmodule Rinha.Application do
   end
 
   defp warmup do
-    fixtures_dir = Path.join(:code.priv_dir(:rinha), "fixtures")
+    fixtures_dir = Path.join([:code.priv_dir(:rinha), "resources", "fixtures"])
 
     if File.dir?(fixtures_dir) do
       for name <- ~w(legit fraud borderline) do

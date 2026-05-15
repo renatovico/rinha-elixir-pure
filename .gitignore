@@ -22,15 +22,12 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 rinha-*.tar
 
-# Reference data binary
-*.bin
-!priv/model_params.bin
-!priv/knn_specialist.bin
-resources/
+# Generated reference / IVF binaries (rebuilt via `make preprocess` /
+# `make ivf-index`). priv/resources/*.json are NOT ignored — those are
+# the runtime configs (mcc_risk, normalization) and warmup fixtures.
+/priv/references_v2.bin
+/priv/ivf_index.bin
 
-# k6 test data (27MB)
-# test/k6/test-data.json
-
-# Rust build artifacts
-/native/knn_nif/target/
-
+# Source dataset (~48 MB) — pulled from the official Rinha 2026 repo;
+# not tracked here.
+/priv/resources/references.json.gz

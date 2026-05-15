@@ -126,13 +126,23 @@ drops final score under the tighter CPU budget.
 ## Quickstart
 
 You'll need `mix`, `docker`, `k6`, and the source dataset at
-`resources/references.json.gz` (50 MB gzipped, 3 M reference vectors).
+`priv/resources/references.json.gz` (~48 MB gzipped, 3 M reference
+vectors). The `.gz` file ships with the official Rinha 2026 repo at
+[`zanfranceschi/rinha-de-backend-2026`](https://github.com/zanfranceschi/rinha-de-backend-2026)
+under `resources/references.json.gz`. Copy or symlink it into this
+project before running the preprocess step:
+
+```bash
+cp /path/to/rinha-de-backend-2026/resources/references.json.gz priv/resources/
+```
+
+Then:
 
 ```bash
 # 1. Decode + quantize the reference vectors → priv/references_v2.bin
 make preprocess
 
-# 2. Train the IVF index (Nx+EXLA k-means K=1024) → priv/ivf_index.bin
+# 2. Train the IVF index (Nx+EXLA k-means K=2048) → priv/ivf_index.bin
 make ivf-index
 
 # 3. Run the full cluster (api1 + api2 + nginx)
@@ -158,7 +168,7 @@ $ make help
   compile            Compile the project
   test               Run ExUnit tests
   preprocess         Generate priv/references_v2.bin from .json.gz
-  ivf-index          Build priv/ivf_index.bin (k-means K=1024)
+  ivf-index          Build priv/ivf_index.bin (k-means K=2048)
   bench              Bench IVF vs brute-force (--count, --probes)
   run                Start single dev instance (port 4000)
   smoke              k6 smoke test against single instance

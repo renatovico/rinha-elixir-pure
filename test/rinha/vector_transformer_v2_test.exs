@@ -108,7 +108,7 @@ defmodule Rinha.VectorTransformerV2Test do
   test "fixtures parse and produce well-formed vectors" do
     for name <- ~w(legit fraud borderline) do
       payload =
-        Path.join(:code.priv_dir(:rinha), "fixtures/#{name}.json")
+        Path.join([:code.priv_dir(:rinha), "resources", "fixtures", "#{name}.json"])
         |> File.read!()
         |> Jason.decode!()
 

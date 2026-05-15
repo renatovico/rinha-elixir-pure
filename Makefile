@@ -3,7 +3,7 @@
         docker-stats docker-logs docker-cycle clean
 .DEFAULT_GOAL := help
 
-REFS_GZ   ?= resources/references.json.gz
+REFS_GZ   ?= priv/resources/references.json.gz
 REFS_BIN  := priv/references_v2.bin
 IVF_BIN   := priv/ivf_index.bin
 IMAGE     := renatoelias/rinha-elixir:latest

@@ -43,7 +43,7 @@ defmodule Rinha.DebugRouter do
   end
 
   get "/fixtures" do
-    dir = Path.join(:code.priv_dir(:rinha), "fixtures")
+    dir = Path.join([:code.priv_dir(:rinha), "resources", "fixtures"])
 
     names =
       case File.ls(dir) do
@@ -55,7 +55,7 @@ defmodule Rinha.DebugRouter do
   end
 
   get "/fixtures/:name" do
-    path = Path.join([:code.priv_dir(:rinha), "fixtures", "#{name}.json"])
+    path = Path.join([:code.priv_dir(:rinha), "resources", "fixtures", "#{name}.json"])
 
     if File.exists?(path) do
       payload = path |> File.read!() |> Jason.decode!()

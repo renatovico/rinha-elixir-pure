@@ -18,7 +18,6 @@ x-ulimits: &ulimits
     hard: 65536
 
 x-api: &api
-  build: .
   image: renatoelias/rinha-elixir-pure:latest
   volumes:
     - sock:/run/sock

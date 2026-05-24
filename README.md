@@ -4,7 +4,7 @@ Real-time fraud-detection API submission for [Rinha de Backend
 2026](https://github.com/zanfranceschi/rinha-de-backend-2026).
 
 Pure-Elixir KNN scoring (k=5) over a 3-million-vector reference set, served
-across a 2-instance Erlang cluster behind nginx. Hot path is an **IVF-flat**
+across a 2-instance Erlang cluster behind a pure-Elixir TCP load balancer. Hot path is an **IVF-flat**
 index built offline with Nx+EXLA k-means; runtime is **zero NIFs, zero
 EXLA** — every byte of the scan is plain BEAM bytecode running over
 `:persistent_term`-stashed binaries.
@@ -25,14 +25,14 @@ EXLA** — every byte of the scan is plain BEAM bytecode running over
 - **`:persistent_term` storage** — all 99 MB of vectors + labels live in
   refcounted binaries shared across schedulers; zero GC pressure on the
   hot path.
-- **nginx** — round-robin between two unix-socket upstreams (api1, api2).
+- **Pure-Elixir TCP load balancer** — round-robin between two unix-socket upstreams (api1, api2).
 
 ## Architecture
 
 ```
               ┌─────────────────────┐
-   :9999 ───► │   nginx (alpine)    │
-              │   round-robin       │
+   :9999 ───► │  Elixir LB          │
+              │  round-robin TCP    │
               └──────────┬──────────┘
                          │ unix sockets
               ┌──────────┴──────────┐
@@ -61,7 +61,7 @@ bucket + 32 KB of centroids + 4 KB of CSR offsets per node.
 |-----------|----:|-------:|
 | api1      | 0.45| 160 MB |
 | api2      | 0.45| 160 MB |
-| nginx     | 0.10|  30 MB |
+| lb        | 0.10|  30 MB |
 | **total** | **1.00** | **350 MB** |
 
 Matches the Rinha 2026 1.0 CPU + 350 MB envelope. Each API runs at
@@ -145,7 +145,7 @@ make preprocess
 # 2. Train the IVF index (Nx+EXLA k-means K=2048) → priv/ivf_index.bin
 make ivf-index
 
-# 3. Run the full cluster (api1 + api2 + nginx)
+# 3. Run the full cluster (api1 + api2 + lb)
 make docker-up
 
 # 4. k6 load test against the Rinha-style port (9999)
@@ -174,7 +174,7 @@ $ make help
   smoke              k6 smoke test against single instance
   load               k6 load test against single instance
   docker-build       Build the prod image
-  docker-up          Start the cluster (api1 + api2 + nginx)
+  docker-up          Start the cluster (api1 + api2 + lb)
   docker-down        Stop the cluster
   docker-stats       Live stats for the cluster
   docker-logs        Follow logs for the cluster
@@ -230,7 +230,7 @@ $ make help
   "participants": ["Renato Vico"],
   "social": ["https://github.com/renatovico"],
   "source-code-repo": "https://github.com/renatovico/rinha-de-backend-2026-elixir",
-  "stack": ["elixir", "phoenix", "nginx", "docker"],
+  "stack": ["elixir", "phoenix", "docker"],
   "open_to_work": false
 }
 ```

@@ -10,9 +10,7 @@ fi
 rm -f /tmp/ready
 
 # Start the app in background, then chmod the socket once it appears so
-# nginx (running as the unprivileged `nginx` user in the sibling container)
-# can connect.  The shared tmpfs volume preserves file modes across the
-# bind mount.
+# the load balancer container can connect through the shared tmpfs volume.
 if [ -n "$SOCKET_PATH" ]; then
   (
     while [ ! -S "$SOCKET_PATH" ]; do sleep 0.1; done

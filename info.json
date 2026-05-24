@@ -2,6 +2,6 @@
     "participants": ["Renato Vico"],
     "social": ["https://github.com/renatovico"],
     "source-code-repo": "https://github.com/renatovico/rinha-elixir-pure",
-    "stack": ["elixir", "phoenix", "nginx", "docker"],
+    "stack": ["elixir", "phoenix", "docker"],
     "open_to_work": false
 }

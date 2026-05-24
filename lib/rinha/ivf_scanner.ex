@@ -75,6 +75,10 @@ defmodule Rinha.IvfScanner do
   """
   @spec score_adaptive([integer()]) :: 0..5
   def score_adaptive(query) when is_list(query) do
+    cached(query, fn -> score_adaptive_uncached(query) end)
+  end
+
+  defp score_adaptive_uncached(query) do
     t0 = System.monotonic_time(:microsecond)
 
     centroid_ids = top_centroids(query, @probes_max)
@@ -115,6 +119,18 @@ defmodule Rinha.IvfScanner do
   def probes, do: @probes_max
 
   ## Internals
+
+  defp cached(query, fun) do
+    case Rinha.BloomFilter.lookup(query) do
+      {:hit, n} ->
+        n
+
+      :miss ->
+        n = fun.()
+        Rinha.BloomFilter.put(query, n)
+        n
+    end
+  end
 
   # Scan a list of centroid buckets, merging into the running top-K.
   # Returns {merged_topk, total_refs_scanned}.

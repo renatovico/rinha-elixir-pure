@@ -1,7 +1,7 @@
 ########################################
 # Stage 1: Build Elixir release
 ########################################
-FROM elixir:1.19.5-otp-28 AS builder
+FROM elixir:1.19.5 AS builder
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

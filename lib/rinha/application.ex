@@ -6,9 +6,18 @@ defmodule Rinha.Application do
   def start(_type, _args) do
     Logger.info("Starting Rinha application...")
 
+    if System.get_env("RINHA_MODE") == "lb" do
+      start_load_balancer()
+    else
+      start_api()
+    end
+  end
+
+  defp start_api do
     Rinha.Resources.load!()
 
     :persistent_term.put(:prof_counter, :atomics.new(1, signed: false))
+    :ok = Rinha.BloomFilter.init()
 
     Logger.info("Loading IVF index...")
     :ok = Rinha.IvfStore.build()
@@ -27,10 +36,21 @@ defmodule Rinha.Application do
       {:ok, _sup} = ok ->
         :persistent_term.put(:rinha_ready, true)
 
-        ready_file = System.get_env("READY_FILE", "/tmp/ready")
-        File.write!(ready_file, "ok")
+        write_ready_file()
         Logger.info("Ready!")
 
+        ok
+
+      err ->
+        err
+    end
+  end
+
+  defp start_load_balancer do
+    case Supervisor.start_link([Rinha.LoadBalancer], strategy: :one_for_one, name: Rinha.Supervisor) do
+      {:ok, _sup} = ok ->
+        write_ready_file()
+        Logger.info("Load balancer ready!")
         ok
 
       err ->
@@ -104,6 +124,11 @@ defmodule Rinha.Application do
     else
       nil
     end
+  end
+
+  defp write_ready_file do
+    ready_file = System.get_env("READY_FILE", "/tmp/ready")
+    File.write!(ready_file, "ok")
   end
 
   defp unix_socket_child do

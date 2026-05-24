@@ -66,19 +66,19 @@ load: ## k6 load test against single instance
 docker-build: $(REFS_BIN) $(IVF_BIN) ## Build the prod image
 	docker compose build
 
-docker-up: $(REFS_BIN) $(IVF_BIN) ## Start the cluster (api1 + api2 + nginx)
+docker-up: $(REFS_BIN) $(IVF_BIN) ## Start the cluster (api1 + api2 + lb)
 	docker compose up -d --build
 	@echo ""
 	@echo "Cluster up: http://localhost:9999"
 	@echo "  api1: cpuset 0,1  (unix:/run/sock/api1.sock)"
 	@echo "  api2: cpuset 2,3  (unix:/run/sock/api2.sock)"
-	@echo "  nginx: cpuset 0,2 (round-robin upstream)"
+	@echo "  lb:    cpuset 0,2 (pure-Elixir round-robin upstream)"
 
 docker-down: ## Stop the cluster
 	docker compose down
 
 docker-stats: ## Live stats for the cluster
-	docker stats --no-stream rinha_pure_api1 rinha_pure_api2 rinha_pure_nginx
+	docker stats --no-stream rinha_pure_api1 rinha_pure_api2 rinha_pure_lb
 
 docker-logs: ## Follow logs for the cluster
 	docker compose logs -f --tail 100

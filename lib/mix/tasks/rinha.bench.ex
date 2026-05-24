@@ -56,7 +56,10 @@ defmodule Mix.Tasks.Rinha.Bench do
     :ok = Rinha.KnnStore.build()
 
     # Generate dataset (deterministic)
-    Mix.shell().info("Generating #{count} synthetic queries (seed=#{seed}, bias=#{fraud_bias})...")
+    Mix.shell().info(
+      "Generating #{count} synthetic queries (seed=#{seed}, bias=#{fraud_bias})..."
+    )
+
     :rand.seed(:exsss, {seed, seed + 1, seed + 2})
 
     queries =
@@ -68,6 +71,7 @@ defmodule Mix.Tasks.Rinha.Bench do
 
     # Brute-force oracle pass (warmup + measured)
     Mix.shell().info("Running brute-force oracle (#{count} queries)...")
+
     {brute_us, brute_results} =
       :timer.tc(fn ->
         for {_label, vec} <- queries do
@@ -76,9 +80,7 @@ defmodule Mix.Tasks.Rinha.Bench do
         end
       end)
 
-    Mix.shell().info(
-      "  brute total=#{ms(brute_us)}ms  mean=#{div(brute_us, count)}us"
-    )
+    Mix.shell().info("  brute total=#{ms(brute_us)}ms  mean=#{div(brute_us, count)}us")
 
     # IVF passes per probe count
     fixed_results =
@@ -144,12 +146,8 @@ defmodule Mix.Tasks.Rinha.Bench do
     results = fixed_results ++ [adaptive_result]
 
     Mix.shell().info("\n=== Results ===\n")
-    Mix.shell().info(
-      "  mode      | recall | bucket | mean_us | p50  | p95   | p99   | max"
-    )
-    Mix.shell().info(
-      "------------+--------+--------+---------+------+-------+-------+------"
-    )
+    Mix.shell().info("  mode      | recall | bucket | mean_us | p50  | p95   | p99   | max")
+    Mix.shell().info("------------+--------+--------+---------+------+-------+-------+------")
 
     for r <- results do
       Mix.shell().info(
@@ -171,12 +169,8 @@ defmodule Mix.Tasks.Rinha.Bench do
     end
 
     Mix.shell().info("")
-    Mix.shell().info(
-      "Recall = share of queries where IVF n exactly matches brute-force n."
-    )
-    Mix.shell().info(
-      "(Same column == bucket_match for k=5 since fraud_count drives bucket.)"
-    )
+    Mix.shell().info("Recall = share of queries where IVF n exactly matches brute-force n.")
+    Mix.shell().info("(Same column == bucket_match for k=5 since fraud_count drives bucket.)")
   end
 
   ## Helpers
@@ -196,6 +190,7 @@ defmodule Mix.Tasks.Rinha.Bench do
   defp mean(xs), do: div(Enum.sum(xs), length(xs))
 
   defp percentile([], _), do: 0
+
   defp percentile(xs, pct) do
     sorted = Enum.sort(xs)
     idx = max(0, trunc(length(sorted) * pct) - 1)

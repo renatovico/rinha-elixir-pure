@@ -112,7 +112,7 @@ defmodule Rinha.DebugRouter do
     t0 = System.monotonic_time(:microsecond)
     vector = Rinha.VectorTransformerV2.transform(payload)
     t1 = System.monotonic_time(:microsecond)
-    n = Rinha.NeuralScorer.score(vector)
+    n = Rinha.HybridScorer.score(vector)
     t2 = System.monotonic_time(:microsecond)
 
     response = Rinha.FraudScorer.response_for(n)

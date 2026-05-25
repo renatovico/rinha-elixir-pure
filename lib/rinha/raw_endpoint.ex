@@ -82,7 +82,7 @@ defmodule Rinha.RawEndpoint do
 
   defp local_score(payload) do
     vector = Rinha.VectorTransformerV2.transform(payload)
-    n = Rinha.NeuralScorer.score(vector)
+    n = Rinha.HybridScorer.score(vector)
     Rinha.FraudScorer.response_for(n)
   end
 

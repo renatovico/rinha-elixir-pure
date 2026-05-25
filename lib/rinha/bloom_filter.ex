@@ -32,8 +32,11 @@ defmodule Rinha.BloomFilter do
   end
 
   @doc "Return `{:hit, fraud_count}` when a vector was scored before."
-  def lookup(vector) when is_list(vector) do
-    key = vector_key(vector)
+  def lookup(vector) when is_list(vector), do: lookup(:default, vector)
+  def lookup(_id), do: :miss
+
+  def lookup(namespace, vector) when is_atom(namespace) and is_list(vector) do
+    key = cache_key(namespace, vector)
     filter = filter!()
 
     if maybe_contains?(filter, key) do
@@ -46,18 +49,23 @@ defmodule Rinha.BloomFilter do
     end
   end
 
-  def lookup(_id), do: :miss
+  def lookup(_namespace, _id), do: :miss
 
   @doc "Store the fraud-neighbour count for a scored vector."
-  def put(vector, n) when is_list(vector) and n in 0..5 do
-    key = vector_key(vector)
+  def put(vector, n) when is_list(vector) and n in 0..5, do: put(:default, vector, n)
+  def put(_id, _n), do: :ok
+
+  def put(namespace, vector, n) when is_atom(namespace) and is_list(vector) and n in 0..5 do
+    key = cache_key(namespace, vector)
     filter = filter!()
     true = :ets.insert(@table, {key, n})
     add(filter, key)
     :ok
   end
 
-  def put(_id, _n), do: :ok
+  def put(_namespace, _id, _n), do: :ok
+
+  defp cache_key(namespace, vector), do: {namespace, vector_key(vector)}
 
   defp filter! do
     case :persistent_term.get(@persistent_key, nil) do

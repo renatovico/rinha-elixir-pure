@@ -20,7 +20,7 @@ defmodule Rinha.NeuralScorer do
   def score([x0, x1, x2, _x3, _x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, _x14, _x15] = vector) do
     t0 = System.monotonic_time(:microsecond)
 
-    case Rinha.BloomFilter.lookup(vector) do
+    case Rinha.BloomFilter.lookup(:neural, vector) do
       {:hit, n} ->
         emit_telemetry(t0, n, :hit)
         n
@@ -31,7 +31,7 @@ defmodule Rinha.NeuralScorer do
           |> do_score(x0, x1, x2, x5, x6, x7, x8, x9, x10, x11, x12, x13)
           |> score_to_count()
 
-        Rinha.BloomFilter.put(vector, n)
+        Rinha.BloomFilter.put(:neural, vector, n)
         emit_telemetry(t0, n, :miss)
         n
     end

@@ -19,6 +19,7 @@ defmodule Rinha.Application do
     :persistent_term.put(:prof_counter, :atomics.new(1, signed: false))
     :persistent_term.put(:cluster_rr_counter, :atomics.new(1, signed: false))
     :ok = Rinha.BloomFilter.init()
+    :ok = Rinha.IvfStore.build()
 
     Logger.info("Warming up scoring with bundled fixtures...")
     warmup()
@@ -72,7 +73,7 @@ defmodule Rinha.Application do
     vectors = fixture_vectors ++ synthetic
 
     Enum.each(vectors, fn v ->
-      _ = Rinha.NeuralScorer.score(v)
+      _ = Rinha.HybridScorer.score(v)
     end)
 
     require Logger

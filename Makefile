@@ -1,10 +1,11 @@
-.PHONY: help deps compile test run smoke load \
+.PHONY: help deps compile test run smoke load debug-ready debug-profile debug-profile-reset debug-fixtures debug-score debug-simulate \
         docker-build docker-up docker-down docker-test docker-load \
         docker-stats docker-logs docker-cycle clean
 .DEFAULT_GOAL := help
 
 IMAGE     := renatoelias/rinha-elixir-pure:latest
 BASE_URL  ?= http://localhost:4000
+DEBUG_URL ?= $(BASE_URL)/debug
 CLUSTER_URL ?= http://localhost:9999
 
 # ── Help ─────────────────────────────────────────────
@@ -33,6 +34,33 @@ smoke: ## k6 smoke test against single instance
 
 load: ## k6 load test against single instance
 	k6 run -e BASE_URL=$(BASE_URL) test/k6/test.js
+
+debug-ready: ## Check debug readiness endpoint
+	curl -sS "$(DEBUG_URL)/ready"
+
+debug-profile: ## Read debug profiler summary
+	curl -sS "$(DEBUG_URL)/profile"
+
+debug-profile-reset: ## Reset debug profiler counters
+	curl -sS -X POST "$(DEBUG_URL)/profile/reset"
+
+debug-fixtures: ## List available bundled fixtures
+	curl -sS "$(DEBUG_URL)/fixtures"
+
+debug-score: ## Score a bundled fixture (FIXTURE=legit|fraud|borderline)
+	@if [ -z "$(FIXTURE)" ]; then \
+		echo "Error: set FIXTURE=legit|fraud|borderline"; \
+		exit 1; \
+	fi
+	curl -sS "$(DEBUG_URL)/fixtures/$(FIXTURE)"
+
+debug-simulate: ## Run debug simulator (COUNT, BIAS, WARMUP optional)
+	@count=$${COUNT:-1000}; \
+	bias=$${BIAS:-0.33}; \
+	warmup=$${WARMUP:-100}; \
+	curl -sS -X POST "$(DEBUG_URL)/simulate" \
+	  -H "content-type: application/json" \
+	  -d "{\"count\":$${count},\"fraud_bias\":$${bias},\"warmup\":$${warmup}}"
 
 # ── Cluster (docker compose, port 9999) ──────────────
 

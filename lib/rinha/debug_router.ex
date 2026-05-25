@@ -1,21 +1,5 @@
 defmodule Rinha.DebugRouter do
-  @moduledoc """
-  Dev/test-only debugging endpoints.
-
-  Mounted under `/debug` from `Rinha.Endpoint` only when `Mix.env()` is not
-  `:prod` so it adds zero overhead to the production hot path.
-
-  ## Routes
-
-    * `GET  /debug/ready`              — liveness/readiness flag
-    * `GET  /debug/fixtures`           — list bundled fixtures
-    * `GET  /debug/fixtures/:name`     — score a bundled fixture
-    * `POST /debug/score`              — score an arbitrary payload (echoes vector + n)
-    * `POST /debug/simulate`           — generate + run N synthetic payloads,
-                                        return aggregated stats
-
-  Bodies are JSON. Responses are JSON. Latencies are reported in microseconds.
-  """
+  @moduledoc false
 
   use Plug.Router
 
@@ -105,8 +89,6 @@ defmodule Rinha.DebugRouter do
   match _ do
     json(conn, 404, %{error: "not found", path: conn.request_path})
   end
-
-  # ---- helpers ----
 
   defp score_payload(conn, payload, fixture_name) do
     t0 = System.monotonic_time(:microsecond)

@@ -1,16 +1,12 @@
 defmodule Rinha.Endpoint do
   use Phoenix.Endpoint, otp_app: :rinha
 
-  # Tidewave (dev only) — must come before the router.
   if Code.ensure_loaded?(Tidewave) do
     plug Tidewave, team: [id: "voyonit", token: "ifh32un7uogwawim7pys3xnnbyxhnlqrekhtq6y"]
   end
 
-  # Hot-path: bypass router for POST /fraud-score and GET /ready.
-  # Reads raw body itself (uses :json), so it must run BEFORE Plug.Parsers.
   plug Rinha.RawEndpoint
 
-  # Debug endpoints — only mounted outside :prod.
   if Mix.env() != :prod do
     plug :debug_dispatch
   end

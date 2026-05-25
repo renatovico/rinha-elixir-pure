@@ -17,7 +17,9 @@ defmodule Rinha.FraudController do
 
   def score(conn, params) do
     if :persistent_term.get(:rinha_ready, false) do
-      response = Rinha.FraudScorer.score(params)
+      vector = Rinha.VectorTransformerV2.transform(params)
+      n = Rinha.NeuralScorer.score(vector)
+      response = Rinha.FraudScorer.response_for(n)
 
       conn
       |> put_resp_content_type("application/json")

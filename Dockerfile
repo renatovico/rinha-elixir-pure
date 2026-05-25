@@ -28,6 +28,8 @@ RUN mix deps.compile
 # Copy source code and compile only app
 COPY lib lib
 COPY priv priv
+RUN rm -f priv/resources/references.json.gz
+RUN rm -f priv/references_v2.bin
 RUN mix compile
 
 # Build release
@@ -65,13 +67,6 @@ ENV LANG=C.UTF-8 \
 WORKDIR /app
 
 COPY --from=builder /app/_build/prod/rel/rinha ./
-
-# The release bundles priv/ivf_index.bin (~94 MB) directly. IvfStore
-# auto-resolves the path via :code.priv_dir(:rinha) when IVF_INDEX_PATH
-# is unset. To override (e.g. bind-mount a freshly retrained index from
-# the host without rebuilding the image), pass:
-#   -e IVF_INDEX_PATH=/app/ivf_index.bin
-#   -v ./priv/ivf_index.bin:/app/ivf_index.bin:ro
 
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh

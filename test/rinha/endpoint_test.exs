@@ -81,7 +81,7 @@ defmodule Rinha.EndpointTest do
   defp ensure_ready! do
     unless :persistent_term.get(:rinha_ready, false) do
       Rinha.Resources.load!()
-      Rinha.KnnStore.build()
+      :ok = Rinha.BloomFilter.init()
       :persistent_term.put(:rinha_ready, true)
     end
   end

@@ -1,8 +1,7 @@
 ## Distributed Erlang
-## Node name comes from RELEASE_NODE env (set by docker-compose).  We do
+## Node name comes from RELEASE_NODE env (set by docker-compose). We do
 ## NOT hardcode -name here so the same release works as both api1@api1
-## and api2@api2.
--setcookie <%= @release.cookie %>
+## and api2@api2. Cookie comes from RELEASE_COOKIE (or releases/COOKIE).
 
 ## Scheduler config — pin to allotted CPUs (compose gives 2 cores via cpuset).
 +S 2:2

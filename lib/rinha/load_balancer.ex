@@ -1,16 +1,16 @@
 defmodule Rinha.LoadBalancer do
   @moduledoc """
-  Small TCP stream load balancer for the two API backends.
+  Tiny TCP stream load balancer for API backends.
 
   It does not parse HTTP. Each accepted client connection is proxied byte-for-byte
-  to one backend Unix socket selected by round-robin.
+  to a backend TCP endpoint selected by round-robin.
   """
 
   use GenServer
   require Logger
 
   @default_port 9999
-  @default_upstreams ["/run/sock/api1.sock", "/run/sock/api2.sock"]
+  @default_upstreams ["api1:4000", "api2:4000"]
   @connect_timeout 1_000
 
   def start_link(opts \\ []) do
@@ -25,10 +25,12 @@ defmodule Rinha.LoadBalancer do
   @impl true
   def init(opts) do
     port = Keyword.get(opts, :port, configured_port())
-    upstreams = Keyword.get(opts, :upstreams, configured_upstreams()) |> List.to_tuple()
+    upstreams = Keyword.get(opts, :upstreams, configured_upstreams())
     acceptors = Keyword.get(opts, :acceptors, configured_acceptors())
 
-    true = tuple_size(upstreams) > 0
+    true = length(upstreams) > 0
+
+    parsed_upstreams = Enum.map(upstreams, &parse_upstream!/1) |> List.to_tuple()
 
     {:ok, listen} =
       :gen_tcp.listen(port, [
@@ -45,12 +47,10 @@ defmodule Rinha.LoadBalancer do
     counter = :atomics.new(1, signed: false)
 
     for _ <- 1..acceptors do
-      spawn_link(fn -> accept_loop(listen, upstreams, counter) end)
+      spawn_link(fn -> accept_loop(listen, parsed_upstreams, counter) end)
     end
 
-    Logger.info(
-      "LoadBalancer listening on :#{actual_port} upstreams=#{inspect(Tuple.to_list(upstreams))}"
-    )
+    Logger.info("LoadBalancer listening on :#{actual_port} upstreams=#{inspect(upstreams)}")
 
     {:ok, %{listen: listen, port: actual_port}}
   end
@@ -114,14 +114,9 @@ defmodule Rinha.LoadBalancer do
 
   defp connect_attempt(upstreams, start_idx, attempts) do
     idx = rem(start_idx + attempts, tuple_size(upstreams))
-    path = elem(upstreams, idx)
+    {host, port} = elem(upstreams, idx)
 
-    case :gen_tcp.connect(
-           {:local, path},
-           0,
-           [:binary, packet: :raw, active: false, nodelay: true],
-           @connect_timeout
-         ) do
+    case :gen_tcp.connect(host, port, [:binary, packet: :raw, active: false, nodelay: true], @connect_timeout) do
       {:ok, socket} -> {:ok, socket}
       {:error, _reason} -> connect_attempt(upstreams, start_idx, attempts + 1)
     end
@@ -188,6 +183,16 @@ defmodule Rinha.LoadBalancer do
     case System.get_env("LB_ACCEPTORS") do
       nil -> max(System.schedulers_online() * 4, 8)
       value -> String.to_integer(value)
+    end
+  end
+
+  defp parse_upstream!(entry) do
+    case String.split(entry, ":", parts: 2) do
+      [host, port] ->
+        {String.to_charlist(host), String.to_integer(port)}
+
+      _ ->
+        raise ArgumentError, "invalid LB upstream: #{inspect(entry)}"
     end
   end
 end

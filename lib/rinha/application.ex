@@ -17,10 +17,8 @@ defmodule Rinha.Application do
     Rinha.Resources.load!()
 
     :persistent_term.put(:prof_counter, :atomics.new(1, signed: false))
+    :persistent_term.put(:cluster_rr_counter, :atomics.new(1, signed: false))
     :ok = Rinha.BloomFilter.init()
-
-    Logger.info("Loading IVF index...")
-    :ok = Rinha.IvfStore.build()
 
     Logger.info("Warming up scoring with bundled fixtures...")
     warmup()
@@ -39,18 +37,6 @@ defmodule Rinha.Application do
         write_ready_file()
         Logger.info("Ready!")
 
-        ok
-
-      err ->
-        err
-    end
-  end
-
-  defp start_load_balancer do
-    case Supervisor.start_link([Rinha.LoadBalancer], strategy: :one_for_one, name: Rinha.Supervisor) do
-      {:ok, _sup} = ok ->
-        write_ready_file()
-        Logger.info("Load balancer ready!")
         ok
 
       err ->
@@ -81,17 +67,12 @@ defmodule Rinha.Application do
         []
       end
 
-    # Plus 200 synthetic queries derived from real refs in the index
-    # (sample one ref from each of 200 buckets, then perturb slightly
-    # to avoid trivial top-K hits). This JIT-warms the BEAM, primes
-    # caches and pre-allocates atoms / persistent_term shapes for the
-    # hot path before we accept traffic.
     synthetic = synthetic_warmup_vectors(200)
 
     vectors = fixture_vectors ++ synthetic
 
     Enum.each(vectors, fn v ->
-      _ = Rinha.IvfScanner.score_adaptive(v)
+      _ = Rinha.NeuralScorer.score(v)
     end)
 
     require Logger
@@ -99,36 +80,28 @@ defmodule Rinha.Application do
   end
 
   defp synthetic_warmup_vectors(count) do
-    %{vectors: vectors, offsets: offsets, k: k, stride: stride} = Rinha.IvfStore.get()
-
-    step = max(1, div(k, count))
-
-    0..(k - 1)//step
-    |> Enum.flat_map(fn cid ->
-      case take_one(offsets, cid, vectors, stride) do
-        nil -> []
-        v -> [v]
-      end
+    1..count
+    |> Enum.map(fn _ ->
+      {_shape, payload} = Rinha.FraudSimulator.generate()
+      Rinha.VectorTransformerV2.transform(payload)
     end)
-    |> Enum.take(count)
-  end
-
-  defp take_one(offsets, cid, vectors, stride) do
-    start = elem(offsets, cid)
-    stop = elem(offsets, cid + 1)
-
-    if stop > start do
-      row_bin = :binary.part(vectors, start * stride * 2, stride * 2)
-
-      for <<v::little-signed-16 <- row_bin>>, do: v
-    else
-      nil
-    end
   end
 
   defp write_ready_file do
     ready_file = System.get_env("READY_FILE", "/tmp/ready")
     File.write!(ready_file, "ok")
+  end
+
+  defp start_load_balancer do
+    case Supervisor.start_link([Rinha.LoadBalancer], strategy: :one_for_one, name: Rinha.Supervisor) do
+      {:ok, _sup} = ok ->
+        write_ready_file()
+        Logger.info("Load balancer ready!")
+        ok
+
+      err ->
+        err
+    end
   end
 
   defp unix_socket_child do

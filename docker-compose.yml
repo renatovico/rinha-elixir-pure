@@ -1,18 +1,6 @@
-x-ulimits: &ulimits
-  nofile:
-    soft: 65536
-    hard: 65536
-
 x-api: &api
   build: .
   image: renatoelias/rinha-elixir-pure:latest
-  volumes:
-    - sock:/run/sock
-    # IVF index (~94 MB) is bundled inside the image at
-    # /app/lib/rinha-*/priv/ivf_index.bin and resolved via
-    # :code.priv_dir(:rinha). To override it without rebuilding the
-    # image, set IVF_INDEX_PATH and bind-mount the file, e.g.:
-    #   - ./priv/ivf_index.bin:/app/ivf_index.bin:ro
   environment:
     READY_FILE: /tmp/ready
     ERL_CRASH_DUMP_SECONDS: "0"
@@ -26,7 +14,6 @@ x-api: &api
     timeout: 2s
     retries: 60
     start_period: 5s
-  ulimits: *ulimits
   networks:
     - net
 
@@ -40,7 +27,7 @@ services:
       ERL_CRASH_DUMP_SECONDS: "0"
       HTTP_ACCEPTORS: "32"
       HTTP_MAX_CONNECTIONS: "8192"
-      SOCKET_PATH: /run/sock/api1.sock
+      PORT: "4000"
       RELEASE_DISTRIBUTION: sname
       RELEASE_NODE: api1
       RELEASE_COOKIE: rinha-secret-cookie
@@ -50,10 +37,10 @@ services:
       resources:
         limits:
           # Rinha 2026 budget: 1.0 CPU + 350 MB total.
-          # api1 = 0.45 CPU / 160 MB, api2 = 0.45 / 160, lb = 0.10 / 30
+          # api1 = 0.45 CPU / 125 MB, api2 = 0.45 / 125, lb = 0.10 / 100
           # → 1.00 CPU / 350 MB.
           cpus: "0.45"
-          memory: "160M"
+          memory: "125M"
 
   api2:
     <<: *api
@@ -64,7 +51,7 @@ services:
       ERL_CRASH_DUMP_SECONDS: "0"
       HTTP_ACCEPTORS: "32"
       HTTP_MAX_CONNECTIONS: "8192"
-      SOCKET_PATH: /run/sock/api2.sock
+      PORT: "4000"
       RELEASE_DISTRIBUTION: sname
       RELEASE_NODE: api2
       RELEASE_COOKIE: rinha-secret-cookie
@@ -74,7 +61,7 @@ services:
       resources:
         limits:
           cpus: "0.45"
-          memory: "160M"
+          memory: "125M"
 
   lb:
     <<: *api
@@ -89,7 +76,7 @@ services:
       RELEASE_DISTRIBUTION: none
       LB_PORT: "9999"
       LB_ACCEPTORS: "16"
-      LB_UPSTREAMS: /run/sock/api1.sock,/run/sock/api2.sock
+      LB_UPSTREAMS: api1:4000,api2:4000
     depends_on:
       api1:
         condition: service_healthy
@@ -100,16 +87,8 @@ services:
       resources:
         limits:
           cpus: "0.10"
-          memory: "30M"
+          memory: "100M"
 
 networks:
   net:
     driver: bridge
-
-volumes:
-  sock:
-    driver: local
-    driver_opts:
-      type: tmpfs
-      device: tmpfs
-      o: "size=4m,mode=0777"

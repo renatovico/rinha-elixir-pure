@@ -19,10 +19,7 @@ if config_env() != :test do
 
   config :rinha,
     port: port,
-    socket_path: System.get_env("SOCKET_PATH"),
-    references_v2_path:
-      System.get_env("REFERENCES_V2_PATH") ||
-        Path.join(File.cwd!(), "priv/references_v2.bin")
+    socket_path: System.get_env("SOCKET_PATH")
 
   # Phoenix Endpoint always listens on the TCP port.
   config :rinha, Rinha.Endpoint,
@@ -45,4 +42,3 @@ if config_env() != :test do
     ],
     server: true
 end
-

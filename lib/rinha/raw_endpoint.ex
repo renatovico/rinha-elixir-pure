@@ -14,6 +14,7 @@ defmodule Rinha.RawEndpoint do
 
   @json_ct {"content-type", "application/json"}
   @ready_503 ~s({"error":"warming up"})
+  @remote_timeout 1_800
 
   @impl true
   def init(opts), do: opts
@@ -24,9 +25,7 @@ defmodule Rinha.RawEndpoint do
       {:ok, body, conn} = read_body(conn)
       payload = decode!(body)
 
-      vector = Rinha.VectorTransformerV2.transform(payload)
-      n = Rinha.IvfScanner.score_adaptive(vector)
-      response = Rinha.FraudScorer.response_for(n)
+      response = score_response(payload)
 
       conn
       |> put_resp_header_fast(@json_ct)
@@ -52,7 +51,40 @@ defmodule Rinha.RawEndpoint do
 
   def call(conn, _opts), do: conn
 
-  @compile {:inline, decode!: 1, put_resp_header_fast: 2, denull: 1}
+  @compile {:inline, decode!: 1, put_resp_header_fast: 2, denull: 1, local_score: 1}
+
+  def remote_score(payload), do: local_score(payload)
+
+  defp score_response(payload) do
+    case remote_peer() do
+      nil ->
+        local_score(payload)
+
+      peer ->
+        case :erpc.call(peer, __MODULE__, :remote_score, [payload], @remote_timeout) do
+          response when is_binary(response) -> response
+          _ -> local_score(payload)
+        end
+    end
+  end
+
+  defp remote_peer do
+    case Rinha.ClusterConnector.peer_node() do
+      nil -> nil
+      peer -> if route_remote?(), do: peer, else: nil
+    end
+  end
+
+  defp route_remote? do
+    counter = :persistent_term.get(:cluster_rr_counter)
+    rem(:atomics.add_get(counter, 1, 1), 2) == 0
+  end
+
+  defp local_score(payload) do
+    vector = Rinha.VectorTransformerV2.transform(payload)
+    n = Rinha.NeuralScorer.score(vector)
+    Rinha.FraudScorer.response_for(n)
+  end
 
   if Code.ensure_loaded?(:json) and function_exported?(:json, :decode, 1) do
     # OTP 27+ decodes JSON `null` as the atom `:null`. Normalize to `nil`

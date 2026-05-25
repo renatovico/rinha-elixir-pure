@@ -14,9 +14,7 @@ defmodule Rinha.Profiler do
 
   Events recorded by default (subscribed in `start_link/1`):
 
-    * `[:rinha, :ivf, :centroid_scan]` -> `:ivf_centroid`
-    * `[:rinha, :ivf, :bucket_scan]`   -> `:ivf_bucket`
-    * `[:rinha, :ivf, :total]`         -> `:ivf_total`
+    * `[:rinha, :neural, :total]` -> `:neural_total`
 
   All values are read by `summary/0` which returns p50/p95/p99/max/mean
   per metric.  Reads are O(buckets) so they are cheap.
@@ -45,9 +43,7 @@ defmodule Rinha.Profiler do
   @array_size @bucket_count + 3
 
   @metrics %{
-    [:rinha, :ivf, :centroid_scan] => :ivf_centroid,
-    [:rinha, :ivf, :bucket_scan] => :ivf_bucket,
-    [:rinha, :ivf, :total] => :ivf_total
+    [:rinha, :neural, :total] => :neural_total
   }
 
   @persistent_key {:rinha, :profiler_counters}

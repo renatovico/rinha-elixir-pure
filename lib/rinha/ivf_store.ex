@@ -69,7 +69,16 @@ defmodule Rinha.IvfStore do
 
   defp decode_offsets(bin), do: for(<<o::little-32 <- bin>>, do: o)
 
-  def get, do: :persistent_term.get(@persistent_key)
+  def get do
+    case :persistent_term.get(@persistent_key, nil) do
+      nil ->
+        :ok = build()
+        :persistent_term.get(@persistent_key)
+
+      store ->
+        store
+    end
+  end
   def centroids, do: get().centroids
   def centroid_norms, do: get().centroid_norms
   def offsets, do: get().offsets

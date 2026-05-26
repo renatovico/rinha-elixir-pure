@@ -28,7 +28,8 @@ RUN mix deps.compile
 # Copy source code and compile only app
 COPY lib lib
 COPY priv priv
-RUN rm -f priv/resources/references.json.gz
+COPY resources resources
+RUN mkdir -p priv/resources && cp -f resources/references.json.gz priv/resources/references.json.gz
 RUN rm -f priv/references_v2.bin
 RUN mix compile
 

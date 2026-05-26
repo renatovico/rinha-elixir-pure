@@ -25,7 +25,7 @@ defmodule Rinha.Domain.Fraud do
   def transform_payload(payload), do: Rinha.Domain.Vectorization.transform(payload)
 
   @impl true
-  def score_vector(vector), do: Rinha.Domain.Models.Hybrid.score(vector)
+  def score_vector(vector), do: Rinha.Domain.Models.KNN.score(vector)
 
   @impl true
   def response_for_neighbors(neighbors), do: Rinha.Domain.Decision.response_for(neighbors)

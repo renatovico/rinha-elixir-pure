@@ -27,10 +27,20 @@ if config_env() != :test do
       v -> String.to_integer(v)
     end
 
+  knn_probes =
+    System.get_env("KNN_PROBES")
+    |> case do
+      nil -> 16
+      "" -> 16
+      v -> String.to_integer(v)
+    end
+
   config :rinha,
     port: port,
     socket_path: System.get_env("SOCKET_PATH"),
-    telemetry_log_interval_ms: telemetry_log_interval_ms
+    telemetry_log_interval_ms: telemetry_log_interval_ms,
+    references_path: System.get_env("REFERENCES_PATH"),
+    knn_probes: knn_probes
 
   # Phoenix Endpoint always listens on the TCP port.
   config :rinha, Rinha.Endpoint,

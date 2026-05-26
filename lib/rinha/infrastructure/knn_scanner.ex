@@ -1,6 +1,6 @@
 defmodule Rinha.KnnScanner do
   @moduledoc """
-  Pure-Elixir KNN scan over the refcounted reference binary.
+  Pure-Elixir KNN scan over indexed reference slices.
 
   Computes the squared L2 distance between a 16-int query and every
   reference row, maintaining a running top-K (smallest distances).

@@ -2,7 +2,7 @@ defmodule Rinha.Domain.Scoring do
   @moduledoc """
   Domain-level scoring facade.
 
-  Orchestrates payload transformation, hybrid model scoring, and response
+  Orchestrates payload transformation, KNN scoring, and response
   rendering so HTTP/adapters don't need to know pipeline internals.
   """
 

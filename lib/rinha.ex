@@ -5,14 +5,11 @@ defmodule Rinha do
   Domain services:
 
     * `Rinha.Domain.Fraud` - core scoring rules
-    * `Rinha.Domain.Models.Hybrid` - hybrid model orchestration
-    * `Rinha.Domain.Models.Neural` - neural prior model
-    * `Rinha.Domain.Models.IVF` - IVF/KNN model
+    * `Rinha.Domain.Models.KNN` - KNN model over the IVF index
     * `Rinha.Domain.Vectorization` - request payload vectorization
     * `Rinha.Domain.Decision` - approval/score response mapping
     * `Rinha.Domain.ReferenceData` - static resource data
     * `Rinha.Domain.Index` - IVF index reads and lifecycle
-    * `Rinha.Domain.Cache` - bloom/ETS cache lifecycle
     * `Rinha.Domain.Simulation` - synthetic data and runs
     * `Rinha.Domain.Readiness` - service readiness state
     * `Rinha.Domain.Cluster` - BEAM cluster introspection

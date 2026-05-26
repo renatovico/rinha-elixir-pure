@@ -17,7 +17,6 @@ defmodule Rinha.Profiler do
     * `[:rinha, :ivf, :centroid_scan]` -> `:ivf_centroid`
     * `[:rinha, :ivf, :bucket_scan]`   -> `:ivf_bucket`
     * `[:rinha, :ivf, :total]`         -> `:ivf_total`
-    * `[:rinha, :neural, :total]` -> `:neural_total`
 
   All values are read by `summary/0` which returns p50/p95/p99/max/mean
   per metric.  Reads are O(buckets) so they are cheap.
@@ -72,11 +71,10 @@ defmodule Rinha.Profiler do
   @metrics %{
     [:rinha, :ivf, :centroid_scan] => :ivf_centroid,
     [:rinha, :ivf, :bucket_scan] => :ivf_bucket,
-    [:rinha, :ivf, :total] => :ivf_total,
-    [:rinha, :neural, :total] => :neural_total
+    [:rinha, :ivf, :total] => :ivf_total
   }
 
-  @metric_order [:ivf_centroid, :ivf_bucket, :ivf_total, :neural_total]
+  @metric_order [:ivf_centroid, :ivf_bucket, :ivf_total]
 
   @persistent_key {:rinha, :profiler_counters}
 

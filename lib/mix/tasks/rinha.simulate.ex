@@ -17,7 +17,7 @@ defmodule Mix.Tasks.Rinha.Simulate do
 
   use Mix.Task
 
-  @shortdoc "Stress the neural scoring pipeline with synthetic payloads"
+  @shortdoc "Stress the KNN scoring pipeline with synthetic payloads"
 
   @impl Mix.Task
   def run(argv) do
@@ -42,8 +42,7 @@ defmodule Mix.Tasks.Rinha.Simulate do
     {:ok, _} = Application.ensure_all_started(:jason)
 
     Rinha.Domain.ReferenceData.load!()
-    :persistent_term.put(:prof_counter, :atomics.new(1, signed: false))
-    :ok = Rinha.Domain.Cache.init()
+    :ok = Rinha.Domain.Index.build!()
 
     sim_opts = [fraud_bias: bias, warmup: warmup]
     sim_opts = if seed, do: [{:seed, {seed, seed + 1, seed + 2}} | sim_opts], else: sim_opts

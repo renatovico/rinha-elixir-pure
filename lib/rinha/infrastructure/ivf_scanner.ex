@@ -1,6 +1,9 @@
 defmodule Rinha.IvfScanner do
   @moduledoc """
   IVF KNN scan over the indexed reference set.
+
+  For a given query vector, chooses top centroids then brute-scans those
+  buckets and returns the number of fraud labels among the top-5 neighbors.
   """
 
   @probes_max 3

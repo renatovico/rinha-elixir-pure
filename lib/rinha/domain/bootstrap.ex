@@ -7,8 +7,8 @@ defmodule Rinha.Domain.Bootstrap do
 
   @spec boot_api!() :: :ok
   def boot_api! do
+    :ok = ensure_reference_dataset!()
     Rinha.Domain.ReferenceData.load!()
-    :ok = Rinha.Domain.Cache.init()
     :ok = Rinha.Domain.Index.build!()
 
     Logger.info("Warming up scoring with bundled fixtures...")
@@ -19,15 +19,56 @@ defmodule Rinha.Domain.Bootstrap do
   @spec warmup!() :: :ok
   def warmup! do
     fixture_vectors = fixture_vectors()
-    synthetic = synthetic_vectors(200)
+    synthetic = synthetic_vectors(100)
     vectors = fixture_vectors ++ synthetic
 
     Enum.each(vectors, fn vector ->
-      _ = Rinha.Domain.Models.Hybrid.score(vector)
+      _ = Rinha.Domain.Models.KNN.score(vector)
     end)
 
     Logger.info("Warmup done (#{length(vectors)} queries)")
     :ok
+  end
+
+  @spec ensure_reference_dataset!() :: :ok
+  def ensure_reference_dataset! do
+    path = reference_dataset_path()
+
+    case File.stat(path) do
+      {:ok, %{size: size}} when size > 0 ->
+        Logger.info("Reference dataset found at #{path} (#{size} bytes)")
+        :ok
+
+      {:ok, _} ->
+        raise "reference dataset is empty at #{path}"
+
+      {:error, reason} ->
+        raise "reference dataset missing at #{path} (#{inspect(reason)})"
+    end
+  end
+
+  @spec reference_dataset_path() :: String.t()
+  def reference_dataset_path do
+    configured =
+      Application.get_env(:rinha, :references_path) ||
+        System.get_env("REFERENCES_PATH")
+
+    default = default_reference_path()
+
+    cond do
+      is_binary(configured) and configured != "" ->
+        Path.expand(configured)
+
+      File.exists?(default) ->
+        default
+
+      true ->
+        Path.expand(Path.join(["resources", "references.json.gz"]))
+    end
+  end
+
+  defp default_reference_path do
+    Path.join([:code.priv_dir(:rinha), "resources", "references.json.gz"])
   end
 
   defp fixture_vectors do

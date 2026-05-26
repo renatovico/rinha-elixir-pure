@@ -3,7 +3,7 @@ defmodule Rinha.VectorTransformerV2 do
   14-dimensional, int16-quantized fraud feature vectorizer.
 
   Vectorizes a transaction request into a 16-int (`s16`) feature vector
-  consumed by `Rinha.NeuralScorer`.
+  consumed by the KNN scorer.
 
   Output layout (16 lanes, stride matches the reference binary):
 

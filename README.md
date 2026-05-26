@@ -7,10 +7,17 @@ Real-time fraud-detection API submission for [Rinha de Backend 2026](https://git
 - Two API BEAM nodes (`api1`, `api2`) behind an Elixir load-balancer node (`lb`).
 - LB forwards HTTP requests over Erlang distribution (`:erpc`) to API nodes (not TCP proxying).
 - API hot-path is `Rinha.RawEndpoint` for `POST /fraud-score`.
-- Scoring pipeline is domain-first:
+- Scoring pipeline is domain-first and correctness-first:
   1. `Rinha.Domain.Vectorization.transform/1`
-  2. `Rinha.Domain.Models.Hybrid.score/1`
+  2. `Rinha.Domain.Models.KNN.score/1`
   3. `Rinha.Domain.Decision.response_for/1`
+
+## Correctness Rules
+
+- Vectorization follows the official 14-dimension rules from `DETECTION_RULES.md`.
+- Runtime vectors are quantized to 16 signed lanes (`s16`) for fast distance scans; lanes `14` and `15` are zero pads.
+- KNN decision uses `k=5` nearest neighbors over the official reference dataset.
+- Decision threshold is fixed: `approved = fraud_score < 0.6`.
 
 ## Architecture
 
@@ -34,8 +41,8 @@ flowchart LR
     API1 <-->|Erlang distribution\npeer RPC| API2
 
     subgraph ScoringPath[Per-request scoring path]
-      V[Rinha.Domain.Vectorization] --> H[Rinha.Domain.Models.Hybrid]
-      H --> D[Rinha.Domain.Decision]
+      V[Rinha.Domain.Vectorization] --> K[Rinha.Domain.Models.KNN]
+      K --> D[Rinha.Domain.Decision]
     end
 
     API1 -. uses .-> ScoringPath
@@ -73,7 +80,6 @@ Tracked telemetry metrics:
 - `ivf_centroid`
 - `ivf_bucket`
 - `ivf_total`
-- `neural_total`
 
 Two ways to read telemetry:
 
@@ -88,13 +94,32 @@ Runtime env var:
 
 ## Runtime Data and Limits
 
-- IVF index format: version `1`
-- IVF runtime parameters: `k=2048`, `n=3_000_000`, `stride=16`
+- Official reference dataset: `resources/references.json.gz` (~48 MB compressed)
+- Indexed runtime file: `priv/ivf_index.bin`
+- IVF index format: version `1`, with `k=2048`, `n=3_000_000`, `stride=16`
+- Default KNN probe budget: `16` buckets (configurable via `KNN_PROBES`)
 - Resource envelope in `docker-compose.yml`:
   - `api1`: `0.45 CPU`, `125 MB`
   - `api2`: `0.45 CPU`, `125 MB`
   - `lb`: `0.10 CPU`, `100 MB`
   - total: `1.00 CPU`, `350 MB`
+
+## Data Files
+
+Reference files shipped in this repo:
+
+- `resources/references.json.gz`
+- `resources/normalization.json`
+- `resources/mcc_risk.json`
+- `resources/example-payloads.json`
+- `resources/example-references.json`
+
+At build time, `resources/references.json.gz` is copied into `priv/resources/` so runtime startup can validate that the official dataset is present.
+
+Runtime env vars:
+
+- `REFERENCES_PATH`: optional override for the references dataset file.
+- `KNN_PROBES`: IVF probe budget used by `Rinha.Domain.Models.KNN` (default `16`).
 
 ## Quickstart
 

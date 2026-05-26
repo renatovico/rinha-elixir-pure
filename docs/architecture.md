@@ -20,12 +20,10 @@ This codebase follows a domain-first architecture with thin adapters.
 
 - `Rinha.Domain.Fraud`
   - Core use case orchestration for scoring payloads.
-  - Coordinates vectorization, model scoring, and decision rendering.
+  - Coordinates vectorization, KNN scoring, and decision rendering.
 
 - `Rinha.Domain.Models.*`
-  - `Hybrid`: orchestration between neural prior and IVF scan.
-  - `Neural`: neural prior model access.
-  - `IVF`: IVF/KNN model access.
+  - `KNN`: nearest-neighbor fraud counting over the IVF index.
 
 - `Rinha.Domain.Vectorization`
   - Payload to fixed 16-lane vector conversion.
@@ -38,9 +36,6 @@ This codebase follows a domain-first architecture with thin adapters.
 
 - `Rinha.Domain.Index`
   - IVF index lifecycle and bucket/centroid reads.
-
-- `Rinha.Domain.Cache`
-  - Bloom + ETS caching lifecycle and lookups.
 
 - `Rinha.Domain.Cluster`
   - Erlang distribution introspection/state snapshots.
@@ -55,7 +50,7 @@ This codebase follows a domain-first architecture with thin adapters.
   - Synthetic payload generation and simulation runs.
 
 - `Rinha.Domain.Bootstrap`
-  - API mode startup pipeline (load resources, init cache/index, warmup).
+  - API mode startup pipeline (validate dataset, load resources, init index, warmup).
 
 ## Adapter Layer
 
@@ -79,14 +74,24 @@ Adapters should call domain services and avoid direct access to low-level infra 
 Infrastructure modules remain in place and are consumed behind domain facades:
 
 - `Rinha.Resources`
-- `Rinha.BloomFilter`
 - `Rinha.IvfStore`
 - `Rinha.VectorTransformerV2`
-- `Rinha.NeuralScorer`
 - `Rinha.IvfScanner`
 - `Rinha.KnnScanner`
 - `Rinha.FraudSimulator`
 - `Rinha.Profiler`
+
+## Scoring Pipeline
+
+- Payload enters via HTTP adapter and is passed to `Rinha.Domain.Fraud`.
+- `Rinha.Domain.Vectorization` converts payload to a 16-lane signed int vector.
+- `Rinha.Domain.Models.KNN` runs KNN counting through `Rinha.IvfScanner`.
+- `Rinha.Domain.Decision` maps fraud count (`0..5`) to the final JSON response.
+
+The implementation is correctness-first with official dataset compatibility:
+
+- Official vectors are represented in 14 dimensions; runtime uses stride 16 with two zero pads for scan efficiency.
+- Decision semantics remain `k=5` nearest neighbors and threshold `fraud_score >= 0.6` as deny.
 
 ## Dependency Rules
 

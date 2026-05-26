@@ -10,11 +10,11 @@ defmodule Rinha.FraudSimulator do
 
   Each call to `generate/1` flips a biased coin (default 1/3) to decide
   whether to emit a "fraud-shaped" or "legit-shaped" payload. The shapes
-  exaggerate the features that drive the KNN's lane values:
+  exaggerate features that affect nearest-neighbor grouping:
 
-    * fraud  — high amount, many installments, off-hours, far from home,
+    * fraud  - high amount, many installments, off-hours, far from home,
                new merchant, large customer/merchant amount delta, etc.
-    * legit  — small amount, few installments, business hours, near home,
+    * legit  - small amount, few installments, business hours, near home,
                known merchant, balanced amounts.
 
   The schema matches `priv/resources/fixtures/*.json` exactly (camelCase nested,
@@ -58,7 +58,7 @@ defmodule Rinha.FraudSimulator do
 
   @doc """
   Run `count` payloads through the full scoring pipeline and return summary
-  stats. Use `:warmup` to discard the first N samples.
+   stats. Use `:warmup` to discard the first N samples.
   """
   @spec run(non_neg_integer(), keyword()) :: map()
   def run(count, opts \\ []) do
@@ -75,7 +75,7 @@ defmodule Rinha.FraudSimulator do
         t0 = System.monotonic_time(:microsecond)
         vector = Rinha.Domain.Vectorization.transform(payload)
         t1 = System.monotonic_time(:microsecond)
-        n = Rinha.Domain.Models.Hybrid.score(vector)
+        n = Rinha.Domain.Models.KNN.score(vector)
         t2 = System.monotonic_time(:microsecond)
         approved = n < 3
         truthy_correct = (label == :fraud and not approved) or (label == :legit and approved)

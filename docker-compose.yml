@@ -73,10 +73,12 @@ services:
       RINHA_MODE: lb
       READY_FILE: /tmp/ready
       ERL_CRASH_DUMP_SECONDS: "0"
-      RELEASE_DISTRIBUTION: none
+      RELEASE_DISTRIBUTION: sname
+      RELEASE_NODE: lb
+      RELEASE_COOKIE: rinha-secret-cookie
       LB_PORT: "9999"
       LB_ACCEPTORS: "16"
-      LB_UPSTREAMS: api1:4000,api2:4000
+      LB_PEER_NODES: api1@api1,api2@api2
     depends_on:
       api1:
         condition: service_healthy

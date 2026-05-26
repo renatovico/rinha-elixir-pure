@@ -7,7 +7,7 @@ Current runtime is a hybrid scorer in pure Elixir:
 - Bloom-filter + ETS cache (`Rinha.BloomFilter`) with namespaces (`:neural`, `:ivf`, `:hybrid`)
 - neural prior (`Rinha.NeuralScorer`) to choose IVF probe budget
 - IVF vector search (`Rinha.IvfScanner` + `Rinha.KnnScanner`) for final decision
-- two API nodes behind a pure-Elixir TCP load balancer
+- two API nodes behind a pure-Elixir Erlang-distribution load balancer
 
 ## Stack
 
@@ -21,7 +21,7 @@ Current runtime is a hybrid scorer in pure Elixir:
 
 ```mermaid
 flowchart LR
-    Client[Client / k6] -->|HTTP :9999| LB[lb\nRinha.LoadBalancer\nTCP round-robin]
+    Client[Client / k6] -->|HTTP :9999| LB[lb\nRinha.LoadBalancerPlug\nErlang RPC round-robin]
     LB --> API1[api1\nRinha.Endpoint\nRinha.RawEndpoint]
     LB --> API2[api2\nRinha.Endpoint\nRinha.RawEndpoint]
 

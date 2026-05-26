@@ -54,6 +54,7 @@ defmodule Rinha.RawEndpoint do
   @compile {:inline, decode!: 1, put_resp_header_fast: 2, denull: 1, local_score: 1}
 
   def remote_score(payload), do: local_score(payload)
+  def remote_ready?, do: :persistent_term.get(:rinha_ready, false)
 
   defp score_response(payload) do
     case remote_peer() do

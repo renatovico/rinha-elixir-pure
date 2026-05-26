@@ -6,6 +6,7 @@ x-api: &api
     ERL_CRASH_DUMP_SECONDS: "0"
     HTTP_ACCEPTORS: "32"
     HTTP_MAX_CONNECTIONS: "8192"
+    TELEMETRY_LOG_INTERVAL_MS: "10000"
     RELEASE_DISTRIBUTION: sname
     RELEASE_COOKIE: rinha-secret-cookie
   healthcheck:

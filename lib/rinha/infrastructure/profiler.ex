@@ -26,6 +26,9 @@ defmodule Rinha.Profiler do
   """
 
   use GenServer
+  require Logger
+
+  @default_log_interval_ms 10_000
 
   @buckets_us [
     1,
@@ -73,6 +76,8 @@ defmodule Rinha.Profiler do
     [:rinha, :neural, :total] => :neural_total
   }
 
+  @metric_order [:ivf_centroid, :ivf_bucket, :ivf_total, :neural_total]
+
   @persistent_key {:rinha, :profiler_counters}
 
   ## Public API
@@ -111,7 +116,7 @@ defmodule Rinha.Profiler do
   ## GenServer
 
   @impl true
-  def init(_opts) do
+  def init(opts) do
     counters =
       Map.new(@metrics, fn {_event, name} ->
         ref = :counters.new(@array_size, [:write_concurrency])
@@ -129,7 +134,18 @@ defmodule Rinha.Profiler do
       )
     end)
 
-    {:ok, %{}}
+    log_interval_ms = configured_log_interval_ms(opts)
+
+    if log_interval_ms > 0 do
+      Process.send_after(self(), :emit_periodic_summary, log_interval_ms)
+      Logger.info("Profiler periodic logs enabled every #{format_interval(log_interval_ms)}")
+    end
+
+    {:ok,
+     %{
+       log_interval_ms: log_interval_ms,
+       previous_raw: raw_metrics_snapshot(counters)
+     }}
   end
 
   @impl true
@@ -138,6 +154,19 @@ defmodule Rinha.Profiler do
       :telemetry.detach({__MODULE__, name})
     end)
   end
+
+  @impl true
+  def handle_info(:emit_periodic_summary, %{log_interval_ms: interval_ms} = state)
+      when interval_ms > 0 do
+    current_raw = raw_metrics_snapshot(:persistent_term.get(@persistent_key))
+    window = diff_raw_metrics(current_raw, state.previous_raw)
+    log_window(window, interval_ms)
+
+    Process.send_after(self(), :emit_periodic_summary, interval_ms)
+    {:noreply, %{state | previous_raw: current_raw}}
+  end
+
+  def handle_info(_, state), do: {:noreply, state}
 
   ## Telemetry handler
 
@@ -212,4 +241,85 @@ defmodule Rinha.Profiler do
       v -> v
     end
   end
+
+  defp configured_log_interval_ms(opts) do
+    opts
+    |> Keyword.get(
+      :log_interval_ms,
+      Application.get_env(:rinha, :telemetry_log_interval_ms, @default_log_interval_ms)
+    )
+    |> case do
+      ms when is_integer(ms) and ms > 0 -> ms
+      _ -> 0
+    end
+  end
+
+  defp raw_metrics_snapshot(counters) do
+    Map.new(counters, fn {name, ref} ->
+      {name,
+       %{
+         counts: for(i <- 1..@bucket_count, do: :counters.get(ref, i)),
+         total: :counters.get(ref, @total_idx),
+         sum: :counters.get(ref, @sum_idx)
+       }}
+    end)
+  end
+
+  defp diff_raw_metrics(current, previous) do
+    Map.new(current, fn {name, cur} ->
+      prev =
+        Map.get(previous, name, %{counts: List.duplicate(0, @bucket_count), total: 0, sum: 0})
+
+      {name,
+       %{
+         counts: Enum.zip_with(cur.counts, prev.counts, &max(&1 - &2, 0)),
+         total: max(cur.total - prev.total, 0),
+         sum: max(cur.sum - prev.sum, 0)
+       }}
+    end)
+  end
+
+  defp log_window(window, interval_ms) do
+    metrics =
+      @metric_order
+      |> Enum.map(fn name ->
+        raw = Map.fetch!(window, name)
+        {name, interval_stats(raw)}
+      end)
+      |> Enum.filter(fn {_name, stats} -> stats.count > 0 end)
+
+    if metrics == [] do
+      Logger.info("[telemetry] last #{format_interval(interval_ms)} no samples")
+    else
+      message =
+        metrics
+        |> Enum.map(fn {name, stats} ->
+          "#{name} n=#{stats.count} mean=#{stats.mean_us}us p95=#{stats.p95_us}us p99=#{stats.p99_us}us max~#{stats.max_us}us"
+        end)
+        |> Enum.join(" | ")
+
+      Logger.info("[telemetry] last #{format_interval(interval_ms)} #{message}")
+    end
+  end
+
+  defp interval_stats(%{counts: counts, total: total, sum: sum}) do
+    %{
+      count: total,
+      mean_us: if(total > 0, do: div(sum, total), else: 0),
+      p95_us: percentile(counts, total, 0.95),
+      p99_us: percentile(counts, total, 0.99),
+      max_us: max_bucket_us(counts)
+    }
+  end
+
+  defp max_bucket_us(counts) do
+    counts
+    |> Enum.zip(@buckets_us)
+    |> Enum.reduce(0, fn {count, bucket_us}, acc ->
+      if count > 0, do: bucket_us, else: acc
+    end)
+  end
+
+  defp format_interval(ms) when rem(ms, 1000) == 0, do: "#{div(ms, 1000)}s"
+  defp format_interval(ms), do: "#{ms}ms"
 end

@@ -17,9 +17,20 @@ if config_env() != :test do
       v -> String.to_integer(v)
     end
 
+  telemetry_log_interval_ms =
+    System.get_env("TELEMETRY_LOG_INTERVAL_MS")
+    |> case do
+      nil -> 10_000
+      "0" -> 0
+      "off" -> 0
+      "OFF" -> 0
+      v -> String.to_integer(v)
+    end
+
   config :rinha,
     port: port,
-    socket_path: System.get_env("SOCKET_PATH")
+    socket_path: System.get_env("SOCKET_PATH"),
+    telemetry_log_interval_ms: telemetry_log_interval_ms
 
   # Phoenix Endpoint always listens on the TCP port.
   config :rinha, Rinha.Endpoint,

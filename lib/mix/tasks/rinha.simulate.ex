@@ -41,21 +41,21 @@ defmodule Mix.Tasks.Rinha.Simulate do
     Mix.Task.run("loadpaths")
     {:ok, _} = Application.ensure_all_started(:jason)
 
-    Rinha.Resources.load!()
+    Rinha.Domain.ReferenceData.load!()
     :persistent_term.put(:prof_counter, :atomics.new(1, signed: false))
-    :ok = Rinha.BloomFilter.init()
+    :ok = Rinha.Domain.Cache.init()
 
     sim_opts = [fraud_bias: bias, warmup: warmup]
     sim_opts = if seed, do: [{:seed, {seed, seed + 1, seed + 2}} | sim_opts], else: sim_opts
 
     t0 = System.monotonic_time(:microsecond)
-    stats = Rinha.FraudSimulator.run(count, sim_opts)
+    stats = Rinha.Domain.Simulation.run(count, sim_opts)
     elapsed = System.monotonic_time(:microsecond) - t0
 
     final =
       stats
       |> Map.put(:wall_us, elapsed)
-      |> Map.put(:throughput_per_sec, throughput(count, elapsed))
+      |> Map.put(:throughput_per_sec, Rinha.Domain.Telemetry.throughput(count, elapsed))
       |> Map.put(:params, %{count: count, fraud_bias: bias, warmup: warmup, seed: seed})
 
     if json? do
@@ -101,7 +101,4 @@ defmodule Mix.Tasks.Rinha.Simulate do
     end)
     |> Enum.join("\n")
   end
-
-  defp throughput(_, 0), do: 0.0
-  defp throughput(count, elapsed_us), do: Float.round(count * 1_000_000 / elapsed_us, 2)
 end

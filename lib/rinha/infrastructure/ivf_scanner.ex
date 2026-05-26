@@ -33,7 +33,7 @@ defmodule Rinha.IvfScanner do
 
   defp scan_buckets(centroid_ids, query, init_acc, init_count) do
     Enum.reduce(centroid_ids, {init_acc, init_count}, fn cid, {acc, count} ->
-      {v_slice, l_slice, len} = Rinha.IvfStore.bucket_slice(cid)
+      {v_slice, l_slice, len} = Rinha.Domain.Index.bucket_slice(cid)
       bucket_topk = Rinha.KnnScanner.scan_slice(v_slice, l_slice, query)
       merged = Rinha.KnnScanner.merge_topk([acc, bucket_topk])
       {merged, count + len}
@@ -61,7 +61,7 @@ defmodule Rinha.IvfScanner do
   end
 
   defp top_centroids(query, p) do
-    centroids = Rinha.IvfStore.centroids()
+    centroids = Rinha.Domain.Index.centroids()
 
     {q0, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15} =
       List.to_tuple(query)
@@ -69,9 +69,26 @@ defmodule Rinha.IvfScanner do
     init = List.duplicate({@big_dist, -1}, p)
 
     centroid_loop(
-      centroids, 0, init, @big_dist,
-      q0, q1, q2, q3, q4, q5, q6, q7,
-      q8, q9, q10, q11, q12, q13, q14, q15
+      centroids,
+      0,
+      init,
+      @big_dist,
+      q0,
+      q1,
+      q2,
+      q3,
+      q4,
+      q5,
+      q6,
+      q7,
+      q8,
+      q9,
+      q10,
+      q11,
+      q12,
+      q13,
+      q14,
+      q15
     )
     |> Enum.map(fn {_d, cid} -> cid end)
   end
@@ -80,17 +97,30 @@ defmodule Rinha.IvfScanner do
     do: topk
 
   defp centroid_loop(
-         <<r0::little-signed-16, r1::little-signed-16, r2::little-signed-16,
-           r3::little-signed-16, r4::little-signed-16, r5::little-signed-16,
-           r6::little-signed-16, r7::little-signed-16, r8::little-signed-16,
-           r9::little-signed-16, r10::little-signed-16, r11::little-signed-16,
-           r12::little-signed-16, r13::little-signed-16, r14::little-signed-16,
-           r15::little-signed-16, rest::binary>>,
+         <<r0::little-signed-16, r1::little-signed-16, r2::little-signed-16, r3::little-signed-16,
+           r4::little-signed-16, r5::little-signed-16, r6::little-signed-16, r7::little-signed-16,
+           r8::little-signed-16, r9::little-signed-16, r10::little-signed-16,
+           r11::little-signed-16, r12::little-signed-16, r13::little-signed-16,
+           r14::little-signed-16, r15::little-signed-16, rest::binary>>,
          i,
          topk,
          worst_dist,
-         q0, q1, q2, q3, q4, q5, q6, q7,
-         q8, q9, q10, q11, q12, q13, q14, q15
+         q0,
+         q1,
+         q2,
+         q3,
+         q4,
+         q5,
+         q6,
+         q7,
+         q8,
+         q9,
+         q10,
+         q11,
+         q12,
+         q13,
+         q14,
+         q15
        ) do
     d0 = q0 - r0
     d1 = q1 - r1
@@ -120,15 +150,49 @@ defmodule Rinha.IvfScanner do
       {new_worst, _} = :lists.last(new_topk)
 
       centroid_loop(
-        rest, i + 1, new_topk, new_worst,
-        q0, q1, q2, q3, q4, q5, q6, q7,
-        q8, q9, q10, q11, q12, q13, q14, q15
+        rest,
+        i + 1,
+        new_topk,
+        new_worst,
+        q0,
+        q1,
+        q2,
+        q3,
+        q4,
+        q5,
+        q6,
+        q7,
+        q8,
+        q9,
+        q10,
+        q11,
+        q12,
+        q13,
+        q14,
+        q15
       )
     else
       centroid_loop(
-        rest, i + 1, topk, worst_dist,
-        q0, q1, q2, q3, q4, q5, q6, q7,
-        q8, q9, q10, q11, q12, q13, q14, q15
+        rest,
+        i + 1,
+        topk,
+        worst_dist,
+        q0,
+        q1,
+        q2,
+        q3,
+        q4,
+        q5,
+        q6,
+        q7,
+        q8,
+        q9,
+        q10,
+        q11,
+        q12,
+        q13,
+        q14,
+        q15
       )
     end
   end

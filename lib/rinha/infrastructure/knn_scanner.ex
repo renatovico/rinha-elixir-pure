@@ -38,8 +38,22 @@ defmodule Rinha.KnnScanner do
       labels_slice,
       init_topk,
       @big_dist,
-      q0, q1, q2, q3, q4, q5, q6, q7,
-      q8, q9, q10, q11, q12, q13, q14, q15
+      q0,
+      q1,
+      q2,
+      q3,
+      q4,
+      q5,
+      q6,
+      q7,
+      q8,
+      q9,
+      q10,
+      q11,
+      q12,
+      q13,
+      q14,
+      q15
     )
   end
 
@@ -70,17 +84,30 @@ defmodule Rinha.KnnScanner do
     do: topk
 
   defp scan_chunk(
-         <<r0::little-signed-16, r1::little-signed-16, r2::little-signed-16,
-           r3::little-signed-16, r4::little-signed-16, r5::little-signed-16,
-           r6::little-signed-16, r7::little-signed-16, r8::little-signed-16,
-           r9::little-signed-16, r10::little-signed-16, r11::little-signed-16,
-           r12::little-signed-16, r13::little-signed-16, r14::little-signed-16,
-           r15::little-signed-16, vrest::binary>>,
+         <<r0::little-signed-16, r1::little-signed-16, r2::little-signed-16, r3::little-signed-16,
+           r4::little-signed-16, r5::little-signed-16, r6::little-signed-16, r7::little-signed-16,
+           r8::little-signed-16, r9::little-signed-16, r10::little-signed-16,
+           r11::little-signed-16, r12::little-signed-16, r13::little-signed-16,
+           r14::little-signed-16, r15::little-signed-16, vrest::binary>>,
          <<label, lrest::binary>>,
          topk,
          worst_dist,
-         q0, q1, q2, q3, q4, q5, q6, q7,
-         q8, q9, q10, q11, q12, q13, q14, q15
+         q0,
+         q1,
+         q2,
+         q3,
+         q4,
+         q5,
+         q6,
+         q7,
+         q8,
+         q9,
+         q10,
+         q11,
+         q12,
+         q13,
+         q14,
+         q15
        ) do
     d0 = q0 - r0
     d1 = q1 - r1
@@ -111,15 +138,49 @@ defmodule Rinha.KnnScanner do
       {new_worst, _} = :lists.last(new_topk)
 
       scan_chunk(
-        vrest, lrest, new_topk, new_worst,
-        q0, q1, q2, q3, q4, q5, q6, q7,
-        q8, q9, q10, q11, q12, q13, q14, q15
+        vrest,
+        lrest,
+        new_topk,
+        new_worst,
+        q0,
+        q1,
+        q2,
+        q3,
+        q4,
+        q5,
+        q6,
+        q7,
+        q8,
+        q9,
+        q10,
+        q11,
+        q12,
+        q13,
+        q14,
+        q15
       )
     else
       scan_chunk(
-        vrest, lrest, topk, worst_dist,
-        q0, q1, q2, q3, q4, q5, q6, q7,
-        q8, q9, q10, q11, q12, q13, q14, q15
+        vrest,
+        lrest,
+        topk,
+        worst_dist,
+        q0,
+        q1,
+        q2,
+        q3,
+        q4,
+        q5,
+        q6,
+        q7,
+        q8,
+        q9,
+        q10,
+        q11,
+        q12,
+        q13,
+        q14,
+        q15
       )
     end
   end

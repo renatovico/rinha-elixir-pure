@@ -4,13 +4,21 @@ defmodule Rinha.VectorTransformerV2Test do
   alias Rinha.VectorTransformerV2, as: V
 
   setup_all do
-    Rinha.Resources.load!()
+    Rinha.Domain.ReferenceData.load!()
     :ok
   end
 
   @legit %{
-    "transaction" => %{"amount" => 41.12, "installments" => 2, "requested_at" => "2026-03-11T18:45:53Z"},
-    "customer" => %{"avg_amount" => 82.24, "tx_count_24h" => 3, "known_merchants" => ["MERC-003", "MERC-016"]},
+    "transaction" => %{
+      "amount" => 41.12,
+      "installments" => 2,
+      "requested_at" => "2026-03-11T18:45:53Z"
+    },
+    "customer" => %{
+      "avg_amount" => 82.24,
+      "tx_count_24h" => 3,
+      "known_merchants" => ["MERC-003", "MERC-016"]
+    },
     "merchant" => %{"id" => "MERC-016", "mcc" => "5411", "avg_amount" => 60.25},
     "terminal" => %{"is_online" => false, "card_present" => true, "km_from_home" => 29.23},
     "last_transaction" => nil
@@ -91,7 +99,12 @@ defmodule Rinha.VectorTransformerV2Test do
   end
 
   test "with last_transaction => lanes 5,6 are clamped quantized values" do
-    payload = put_in(@legit, ["last_transaction"], %{"timestamp" => "2026-03-11T18:00:00Z", "km_from_current" => 12.0})
+    payload =
+      put_in(@legit, ["last_transaction"], %{
+        "timestamp" => "2026-03-11T18:00:00Z",
+        "km_from_current" => 12.0
+      })
+
     out = V.transform(payload)
     # 45min 53s / 1440 = 0.0319 => q = round(0.0319*8192) = 261
     assert Enum.at(out, 5) == 261

@@ -28,9 +28,9 @@ flowchart LR
     API1 <-->|Erlang distribution\npeer RPC| API2
 
     subgraph ScoringPath[Per-request scoring path]
-      V[VectorTransformerV2\n16-int vector] --> H[Rinha.HybridScorer]
+      V[Domain.Vectorization\n16-int vector] --> H[Domain.Models.Hybrid]
       H --> B{BloomFilter :hybrid\ncache hit?}
-      B -->|yes| R[FraudScorer response]
+      B -->|yes| R[Domain.Decision response]
       B -->|no| N[Rinha.NeuralScorer\nprior 0..5]
       N --> P[Probe policy\n2 or 3 probes]
       P --> I[Rinha.IvfScanner]
@@ -59,11 +59,11 @@ flowchart LR
 ## Request flow
 
 1. `Rinha.RawEndpoint` handles `POST /fraud-score` directly.
-2. Payload is transformed by `Rinha.VectorTransformerV2.transform/1`.
-3. `Rinha.HybridScorer.score/1` checks Bloom/ETS cache for `:hybrid`.
+2. Payload is transformed by `Rinha.Domain.Vectorization.transform/1`.
+3. `Rinha.Domain.Models.Hybrid.score/1` checks Bloom/ETS cache for `:hybrid`.
 4. On miss, neural prior is computed and mapped to probe count (`2` or `3`).
 5. `Rinha.IvfScanner.score/2` selects top centroids and scans probed buckets.
-6. `Rinha.FraudScorer.response_for/1` returns final JSON (`approved`, `fraud_score`).
+6. `Rinha.Domain.Decision.response_for/1` returns final JSON (`approved`, `fraud_score`).
 
 ## Debug and profiling endpoints
 

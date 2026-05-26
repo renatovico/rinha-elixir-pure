@@ -45,8 +45,8 @@ defmodule Rinha.VectorTransformerV2 do
 
   @doc "Transform a fraud-score request payload into a flat list of 16 ints."
   def transform(payload) do
-    norm = Rinha.Resources.normalization()
-    mcc_risk = Rinha.Resources.mcc_risk()
+    norm = Rinha.Domain.ReferenceData.normalization()
+    mcc_risk = Rinha.Domain.ReferenceData.mcc_risk()
 
     transaction = payload["transaction"] || %{}
     customer = payload["customer"] || %{}
@@ -119,6 +119,7 @@ defmodule Rinha.VectorTransformerV2 do
 
   defp q(v) do
     qv = round(v * @scale)
+
     cond do
       qv > 32_767 -> 32_767
       qv < -32_768 -> -32_768
@@ -128,12 +129,26 @@ defmodule Rinha.VectorTransformerV2 do
 
   # Returns {hour, dow_zero_based_monday}; 0/0 on parse failure.
   defp parse_iso_utc(<<
-         y1, y2, y3, y4, ?-,
-         mo1, mo2, ?-,
-         d1, d2, ?T,
-         h1, h2, ?:,
-         _mi1, _mi2, ?:,
-         _s1, _s2, ?Z
+         y1,
+         y2,
+         y3,
+         y4,
+         ?-,
+         mo1,
+         mo2,
+         ?-,
+         d1,
+         d2,
+         ?T,
+         h1,
+         h2,
+         ?:,
+         _mi1,
+         _mi2,
+         ?:,
+         _s1,
+         _s2,
+         ?Z
        >>)
        when y1 in ?0..?9 and y2 in ?0..?9 and y3 in ?0..?9 and y4 in ?0..?9 and
               mo1 in ?0..?9 and mo2 in ?0..?9 and d1 in ?0..?9 and d2 in ?0..?9 and
@@ -156,12 +171,26 @@ defmodule Rinha.VectorTransformerV2 do
 
   # Returns {:ok, total_seconds_from_year_0} or :error.
   defp parse_iso_seconds(<<
-         y1, y2, y3, y4, ?-,
-         mo1, mo2, ?-,
-         d1, d2, ?T,
-         h1, h2, ?:,
-         mi1, mi2, ?:,
-         s1, s2, ?Z
+         y1,
+         y2,
+         y3,
+         y4,
+         ?-,
+         mo1,
+         mo2,
+         ?-,
+         d1,
+         d2,
+         ?T,
+         h1,
+         h2,
+         ?:,
+         mi1,
+         mi2,
+         ?:,
+         s1,
+         s2,
+         ?Z
        >>)
        when y1 in ?0..?9 and y2 in ?0..?9 and y3 in ?0..?9 and y4 in ?0..?9 and
               mo1 in ?0..?9 and mo2 in ?0..?9 and d1 in ?0..?9 and d2 in ?0..?9 and

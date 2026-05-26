@@ -2,8 +2,8 @@ defmodule Rinha.NeuralScorerTest do
   use ExUnit.Case, async: true
 
   setup_all do
-    Rinha.Resources.load!()
-    :ok = Rinha.BloomFilter.init()
+    Rinha.Domain.ReferenceData.load!()
+    :ok = Rinha.Domain.Cache.init()
     :ok
   end
 
@@ -31,6 +31,6 @@ defmodule Rinha.NeuralScorerTest do
     path
     |> File.read!()
     |> Jason.decode!()
-    |> Rinha.VectorTransformerV2.transform()
+    |> Rinha.Domain.Vectorization.transform()
   end
 end

@@ -3,26 +3,28 @@ defmodule Rinha.DebugRouter do
 
   use Plug.Router
 
-  plug :match
-  plug Plug.Parsers,
+  plug(:match)
+
+  plug(Plug.Parsers,
     parsers: [:json],
     pass: ["application/json"],
     json_decoder: Jason
+  )
 
-  plug :dispatch
+  plug(:dispatch)
 
   get "/ready" do
-    ok = :persistent_term.get(:rinha_ready, false)
+    ok = Rinha.Domain.Readiness.ready?()
     json(conn, if(ok, do: 200, else: 503), %{ready: ok})
   end
 
   get "/profile" do
-    summary = Rinha.Profiler.summary()
+    summary = Rinha.Domain.Telemetry.profiler_summary()
     json(conn, 200, summary)
   end
 
   post "/profile/reset" do
-    Rinha.Profiler.reset()
+    Rinha.Domain.Telemetry.reset_profiler()
     json(conn, 200, %{ok: true})
   end
 
@@ -31,8 +33,11 @@ defmodule Rinha.DebugRouter do
 
     names =
       case File.ls(dir) do
-        {:ok, files} -> files |> Enum.filter(&String.ends_with?(&1, ".json")) |> Enum.map(&Path.rootname/1)
-        _ -> []
+        {:ok, files} ->
+          files |> Enum.filter(&String.ends_with?(&1, ".json")) |> Enum.map(&Path.rootname/1)
+
+        _ ->
+          []
       end
 
     json(conn, 200, %{fixtures: names})
@@ -74,13 +79,13 @@ defmodule Rinha.DebugRouter do
     opts = [fraud_bias: fraud_bias, warmup: warmup] ++ seed_opts
 
     t0 = System.monotonic_time(:microsecond)
-    stats = Rinha.FraudSimulator.run(count, opts)
+    stats = Rinha.Domain.Simulation.run(count, opts)
     elapsed = System.monotonic_time(:microsecond) - t0
 
     body =
       stats
       |> Map.put(:wall_us, elapsed)
-      |> Map.put(:throughput_per_sec, throughput(count, elapsed))
+      |> Map.put(:throughput_per_sec, Rinha.Domain.Telemetry.throughput(count, elapsed))
       |> Map.put(:params, %{count: count, fraud_bias: fraud_bias, warmup: warmup})
 
     json(conn, 200, body)
@@ -92,17 +97,17 @@ defmodule Rinha.DebugRouter do
 
   defp score_payload(conn, payload, fixture_name) do
     t0 = System.monotonic_time(:microsecond)
-    vector = Rinha.VectorTransformerV2.transform(payload)
+    result = Rinha.Domain.Scoring.score_payload(payload)
     t1 = System.monotonic_time(:microsecond)
-    n = Rinha.HybridScorer.score(vector)
+    n = result.neighbors
     t2 = System.monotonic_time(:microsecond)
 
-    response = Rinha.FraudScorer.response_for(n)
+    response = result.response
 
     json(conn, 200, %{
       fixture: fixture_name,
       n: n,
-      vector: vector,
+      vector: result.vector,
       response: Jason.decode!(response),
       latency_us: %{
         transform: t1 - t0,
@@ -112,28 +117,29 @@ defmodule Rinha.DebugRouter do
     })
   end
 
-  defp throughput(_count, 0), do: 0.0
-  defp throughput(count, elapsed_us), do: Float.round(count * 1_000_000 / elapsed_us, 2)
-
   defp to_int(nil, default), do: default
   defp to_int(v, _) when is_integer(v), do: v
+
   defp to_int(v, default) when is_binary(v) do
     case Integer.parse(v) do
       {n, _} -> n
       :error -> default
     end
   end
+
   defp to_int(_, default), do: default
 
   defp to_float(nil, default), do: default
   defp to_float(v, _) when is_float(v), do: v
   defp to_float(v, _) when is_integer(v), do: v * 1.0
+
   defp to_float(v, default) when is_binary(v) do
     case Float.parse(v) do
       {n, _} -> n
       :error -> default
     end
   end
+
   defp to_float(_, default), do: default
 
   defp json(conn, status, body) do

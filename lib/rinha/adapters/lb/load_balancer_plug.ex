@@ -49,7 +49,7 @@ defmodule Rinha.LoadBalancerPlug do
 
   def call(%Plug.Conn{method: "GET", path_info: ["debug", "cluster"]} = conn, _opts) do
     peers = Rinha.LoadBalancer.peer_nodes() |> Enum.map(&Atom.to_string/1)
-    connected = Node.list() |> Enum.map(&Atom.to_string/1)
+    connected = Rinha.Domain.Cluster.connected_nodes()
 
     remotes =
       Rinha.LoadBalancer.peer_nodes()
@@ -69,7 +69,7 @@ defmodule Rinha.LoadBalancerPlug do
     body =
       Jason.encode!(%{
         lb: %{
-          node: Atom.to_string(Node.self()),
+          node: Rinha.Domain.Cluster.self_node(),
           connected_nodes: connected,
           configured_peers: peers
         },

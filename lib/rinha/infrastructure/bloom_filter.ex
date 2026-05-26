@@ -154,6 +154,6 @@ defmodule Rinha.BloomFilter do
   end
 
   defp power_of_two?(n) do
-    (n &&& (n - 1)) == 0
+    (n &&& n - 1) == 0
   end
 end

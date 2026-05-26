@@ -73,9 +73,9 @@ defmodule Rinha.FraudSimulator do
     samples =
       for {label, payload} <- stream(count, opts) do
         t0 = System.monotonic_time(:microsecond)
-        vector = Rinha.VectorTransformerV2.transform(payload)
+        vector = Rinha.Domain.Vectorization.transform(payload)
         t1 = System.monotonic_time(:microsecond)
-        n = Rinha.HybridScorer.score(vector)
+        n = Rinha.Domain.Models.Hybrid.score(vector)
         t2 = System.monotonic_time(:microsecond)
         approved = n < 3
         truthy_correct = (label == :fraud and not approved) or (label == :legit and approved)
@@ -141,7 +141,12 @@ defmodule Rinha.FraudSimulator do
 
   defp legit_payload do
     merchant_id = Enum.random(@merchant_ids)
-    known = Enum.uniq([merchant_id | Enum.take_random(@merchant_ids -- [merchant_id], 1 + :rand.uniform(3))])
+
+    known =
+      Enum.uniq([
+        merchant_id | Enum.take_random(@merchant_ids -- [merchant_id], 1 + :rand.uniform(3))
+      ])
+
     avg = uniform(20.0, 150.0)
 
     %{
@@ -171,7 +176,9 @@ defmodule Rinha.FraudSimulator do
   end
 
   defp fraud_payload do
-    merchant_id = "MERC-" <> String.pad_leading(Integer.to_string(900 + :rand.uniform(99)), 3, "0")
+    merchant_id =
+      "MERC-" <> String.pad_leading(Integer.to_string(900 + :rand.uniform(99)), 3, "0")
+
     avg = uniform(50.0, 300.0)
 
     %{

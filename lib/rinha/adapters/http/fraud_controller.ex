@@ -8,7 +8,7 @@ defmodule Rinha.FraudController do
   import Plug.Conn
 
   def ready(conn, _params) do
-    if :persistent_term.get(:rinha_ready, false) do
+    if Rinha.Domain.Readiness.ready?() do
       send_resp(conn, 200, "OK")
     else
       send_resp(conn, 503, "NOT READY")
@@ -16,10 +16,8 @@ defmodule Rinha.FraudController do
   end
 
   def score(conn, params) do
-    if :persistent_term.get(:rinha_ready, false) do
-      vector = Rinha.VectorTransformerV2.transform(params)
-      n = Rinha.HybridScorer.score(vector)
-      response = Rinha.FraudScorer.response_for(n)
+    if Rinha.Domain.Readiness.ready?() do
+      response = Rinha.Domain.Fraud.response_for_payload(params)
 
       conn
       |> put_resp_content_type("application/json")

@@ -1,4 +1,4 @@
-defmodule Rinha.FraudScorerTest do
+defmodule Rinha.DomainDecisionTest do
   use ExUnit.Case, async: true
 
   describe "responses" do
@@ -52,19 +52,8 @@ defmodule Rinha.FraudScorerTest do
     end
   end
 
-  # Access the pre-computed response map directly
+  # Use the domain decision policy directly
   defp fraud_response(count) do
-    Map.fetch!(responses_map(), count)
-  end
-
-  defp responses_map do
-    %{
-      0 => ~s({"approved":true,"fraud_score":0.0}),
-      1 => ~s({"approved":true,"fraud_score":0.2}),
-      2 => ~s({"approved":true,"fraud_score":0.4}),
-      3 => ~s({"approved":false,"fraud_score":0.6}),
-      4 => ~s({"approved":false,"fraud_score":0.8}),
-      5 => ~s({"approved":false,"fraud_score":1.0})
-    }
+    Rinha.Domain.Decision.response_for(count)
   end
 end

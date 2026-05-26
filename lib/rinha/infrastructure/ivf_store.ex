@@ -79,6 +79,7 @@ defmodule Rinha.IvfStore do
         store
     end
   end
+
   def centroids, do: get().centroids
   def centroid_norms, do: get().centroid_norms
   def offsets, do: get().offsets

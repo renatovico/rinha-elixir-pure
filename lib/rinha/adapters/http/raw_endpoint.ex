@@ -21,7 +21,7 @@ defmodule Rinha.RawEndpoint do
 
   @impl true
   def call(%Plug.Conn{method: "POST", path_info: ["fraud-score"]} = conn, _opts) do
-    if :persistent_term.get(:rinha_ready, false) do
+    if Rinha.Domain.Readiness.ready?() do
       {:ok, body, conn} = read_body(conn)
       payload = decode!(body)
 
@@ -40,8 +40,7 @@ defmodule Rinha.RawEndpoint do
   end
 
   def call(%Plug.Conn{method: "GET", path_info: ["ready"]} = conn, _opts) do
-    {status, body} =
-      if :persistent_term.get(:rinha_ready, false), do: {200, "OK"}, else: {503, "NOT READY"}
+    {status, body} = if Rinha.Domain.Readiness.ready?(), do: {200, "OK"}, else: {503, "NOT READY"}
 
     conn
     |> put_resp_content_type("text/plain")
@@ -51,19 +50,11 @@ defmodule Rinha.RawEndpoint do
 
   def call(conn, _opts), do: conn
 
-  @compile {:inline, decode!: 1, put_resp_header_fast: 2, denull: 1, local_score: 1}
+  @compile {:inline, decode!: 1, put_resp_header_fast: 2, local_score: 1}
 
   def remote_score(payload), do: local_score(payload)
-  def remote_ready?, do: :persistent_term.get(:rinha_ready, false)
-
-  def remote_cluster_status do
-    %{
-      node: Atom.to_string(Node.self()),
-      ready: :persistent_term.get(:rinha_ready, false),
-      connected_nodes: Enum.map(Node.list(), &Atom.to_string/1),
-      configured_peer: configured_peer_string()
-    }
-  end
+  def remote_ready?, do: Rinha.Domain.Readiness.ready?()
+  def remote_cluster_status, do: Rinha.Domain.Cluster.status_snapshot()
 
   defp score_response(payload) do
     case remote_peer() do
@@ -91,32 +82,23 @@ defmodule Rinha.RawEndpoint do
   end
 
   defp local_score(payload) do
-    vector = Rinha.VectorTransformerV2.transform(payload)
-    n = Rinha.HybridScorer.score(vector)
-    Rinha.FraudScorer.response_for(n)
+    Rinha.Domain.Fraud.response_for_payload(payload)
   end
 
   if Code.ensure_loaded?(:json) and function_exported?(:json, :decode, 1) do
     # OTP 27+ decodes JSON `null` as the atom `:null`. Normalize to `nil`
     # so downstream code (and tests written against Jason) Just Works.
     defp decode!(body), do: body |> :json.decode() |> denull()
+
+    defp denull(:null), do: nil
+    defp denull(map) when is_map(map), do: :maps.map(fn _, v -> denull(v) end, map)
+    defp denull(list) when is_list(list), do: Enum.map(list, &denull/1)
+    defp denull(other), do: other
   else
     defp decode!(body), do: Jason.decode!(body)
   end
 
-  defp denull(:null), do: nil
-  defp denull(map) when is_map(map), do: :maps.map(fn _, v -> denull(v) end, map)
-  defp denull(list) when is_list(list), do: Enum.map(list, &denull/1)
-  defp denull(other), do: other
-
   defp put_resp_header_fast(conn, {key, val}) do
     %{conn | resp_headers: [{key, val} | conn.resp_headers]}
-  end
-
-  defp configured_peer_string do
-    case Rinha.ClusterConnector.peer_node() do
-      nil -> nil
-      peer -> Atom.to_string(peer)
-    end
   end
 end

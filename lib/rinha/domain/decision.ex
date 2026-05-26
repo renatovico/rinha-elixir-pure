@@ -1,9 +1,6 @@
-defmodule Rinha.FraudScorer do
+defmodule Rinha.Domain.Decision do
   @moduledoc """
-  Maps neural fraud counts (0..5) to precomputed JSON responses.
-
-  The 6 precomputed responses encode `fraud_score = n / 5.0` with
-  `approved = score < 0.6`.
+  Domain decision policy from fraud-neighbor count to API response.
   """
 
   @responses %{
@@ -15,10 +12,9 @@ defmodule Rinha.FraudScorer do
     5 => ~s({"approved":false,"fraud_score":1.0})
   }
 
-  @doc "Map a fraud-neighbor count (0..5) to its precomputed JSON response."
   @spec response_for(0..5) :: String.t()
   def response_for(n) when n in 0..5, do: Map.fetch!(@responses, n)
 
-  @doc "All precomputed responses."
+  @spec responses() :: %{(0..5) => String.t()}
   def responses, do: @responses
 end

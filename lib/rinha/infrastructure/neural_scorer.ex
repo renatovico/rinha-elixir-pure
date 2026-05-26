@@ -20,7 +20,7 @@ defmodule Rinha.NeuralScorer do
   def score([x0, x1, x2, _x3, _x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, _x14, _x15] = vector) do
     t0 = System.monotonic_time(:microsecond)
 
-    case Rinha.BloomFilter.lookup(:neural, vector) do
+    case Rinha.Domain.Cache.lookup(:neural, vector) do
       {:hit, n} ->
         emit_telemetry(t0, n, :hit)
         n
@@ -31,7 +31,7 @@ defmodule Rinha.NeuralScorer do
           |> do_score(x0, x1, x2, x5, x6, x7, x8, x9, x10, x11, x12, x13)
           |> score_to_count()
 
-        Rinha.BloomFilter.put(:neural, vector, n)
+        Rinha.Domain.Cache.put(:neural, vector, n)
         emit_telemetry(t0, n, :miss)
         n
     end
@@ -53,7 +53,12 @@ defmodule Rinha.NeuralScorer do
     a12 = to_unit(x12)
     a13 = to_unit(x13)
 
-    h1 = relu(1.8 * a0 + 1.2 * a1 + 1.7 * a2 + 1.0 * a7 + 1.3 * a8 + 1.6 * a11 + 1.8 * a12 + 0.8 * (1.0 - a10) - 1.0)
+    h1 =
+      relu(
+        1.8 * a0 + 1.2 * a1 + 1.7 * a2 + 1.0 * a7 + 1.3 * a8 + 1.6 * a11 + 1.8 * a12 +
+          0.8 * (1.0 - a10) - 1.0
+      )
+
     h2 = relu(1.4 * a5 + 1.1 * a6 + 0.9 * a9 - 0.7 * a10 - 0.8)
     h3 = relu(1.1 * a13 + 0.8 * a2 + 0.6 * a12 - 0.9)
     h4 = relu(1.0 * a11 + 1.0 * a12 + 0.8 * a0 - 0.9)

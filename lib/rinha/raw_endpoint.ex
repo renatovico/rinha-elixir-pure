@@ -56,6 +56,15 @@ defmodule Rinha.RawEndpoint do
   def remote_score(payload), do: local_score(payload)
   def remote_ready?, do: :persistent_term.get(:rinha_ready, false)
 
+  def remote_cluster_status do
+    %{
+      node: Atom.to_string(Node.self()),
+      ready: :persistent_term.get(:rinha_ready, false),
+      connected_nodes: Enum.map(Node.list(), &Atom.to_string/1),
+      configured_peer: configured_peer_string()
+    }
+  end
+
   defp score_response(payload) do
     case remote_peer() do
       nil ->
@@ -102,5 +111,12 @@ defmodule Rinha.RawEndpoint do
 
   defp put_resp_header_fast(conn, {key, val}) do
     %{conn | resp_headers: [{key, val} | conn.resp_headers]}
+  end
+
+  defp configured_peer_string do
+    case Rinha.ClusterConnector.peer_node() do
+      nil -> nil
+      peer -> Atom.to_string(peer)
+    end
   end
 end

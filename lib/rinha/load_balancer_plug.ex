@@ -47,6 +47,40 @@ defmodule Rinha.LoadBalancerPlug do
     end
   end
 
+  def call(%Plug.Conn{method: "GET", path_info: ["debug", "cluster"]} = conn, _opts) do
+    peers = Rinha.LoadBalancer.peer_nodes() |> Enum.map(&Atom.to_string/1)
+    connected = Node.list() |> Enum.map(&Atom.to_string/1)
+
+    remotes =
+      Rinha.LoadBalancer.peer_nodes()
+      |> Enum.map(fn peer ->
+        ensure_connected(peer)
+
+        status =
+          case rpc_call(peer, :remote_cluster_status, []) do
+            {:ok, map} when is_map(map) -> Map.put(map, :reachable, true)
+            _ -> %{reachable: false}
+          end
+
+        {Atom.to_string(peer), status}
+      end)
+      |> Map.new()
+
+    body =
+      Jason.encode!(%{
+        lb: %{
+          node: Atom.to_string(Node.self()),
+          connected_nodes: connected,
+          configured_peers: peers
+        },
+        remotes: remotes
+      })
+
+    conn
+    |> put_resp_content_type(@json_ct)
+    |> send_resp(200, body)
+  end
+
   def call(conn, _opts), do: send_resp(conn, 404, "Not Found")
 
   defp read_full_body(conn, acc \\ []) do
@@ -66,15 +100,21 @@ defmodule Rinha.LoadBalancerPlug do
     |> Enum.reduce_while({:error, :no_peer}, fn peer, _acc ->
       ensure_connected(peer)
 
-      try do
-        result = :erpc.call(peer, Rinha.RawEndpoint, fun, args, @rpc_timeout)
-        {:halt, {:ok, result}}
-      rescue
-        _ -> {:cont, {:error, :rpc_failed}}
-      catch
-        :exit, _ -> {:cont, {:error, :rpc_failed}}
+      case rpc_call(peer, fun, args) do
+        {:ok, result} -> {:halt, {:ok, result}}
+        {:error, :rpc_failed} -> {:cont, {:error, :rpc_failed}}
       end
     end)
+  end
+
+  defp rpc_call(peer, fun, args) do
+    try do
+      {:ok, :erpc.call(peer, Rinha.RawEndpoint, fun, args, @rpc_timeout)}
+    rescue
+      _ -> {:error, :rpc_failed}
+    catch
+      :exit, _ -> {:error, :rpc_failed}
+    end
   end
 
   defp ensure_connected(peer) do

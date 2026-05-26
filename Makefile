@@ -1,4 +1,4 @@
-.PHONY: help deps compile test run smoke load debug-ready debug-profile debug-profile-reset debug-fixtures debug-score debug-simulate \
+.PHONY: help deps compile test run smoke load debug-ready debug-profile debug-profile-reset debug-fixtures debug-score debug-simulate debug-cluster \
         docker-build docker-up docker-down docker-test docker-load \
         docker-stats docker-logs docker-cycle clean
 .DEFAULT_GOAL := help
@@ -62,6 +62,9 @@ debug-simulate: ## Run debug simulator (COUNT, BIAS, WARMUP optional)
 	  -H "content-type: application/json" \
 	  -d "{\"count\":$${count},\"fraud_bias\":$${bias},\"warmup\":$${warmup}}"
 
+debug-cluster: ## Check cluster status via LB debug endpoint
+	curl -sS "$(CLUSTER_URL)/debug/cluster"
+
 # ── Cluster (docker compose, port 9999) ──────────────
 
 docker-build: ## Build the prod image
@@ -73,7 +76,7 @@ docker-up: ## Start the cluster (api1 + api2 + lb)
 	@echo "Cluster up: http://localhost:9999"
 	@echo "  api1: cpuset 0,1  (:4000, cluster scorer)"
 	@echo "  api2: cpuset 2,3  (:4000, cluster scorer)"
-	@echo "  lb:    cpuset 0,2  (:9999, Elixir TCP proxy)"
+	@echo "  lb:    cpuset 0,2  (:9999, Erlang RPC load balancer)"
 
 docker-down: ## Stop the cluster
 	docker compose down

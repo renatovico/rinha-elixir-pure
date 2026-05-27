@@ -17,7 +17,7 @@ defmodule Rinha do
 
   Adapter layer:
 
-    * `Rinha.Endpoint` / `Rinha.RawEndpoint` / `Rinha.FraudController`
+    * `Rinha.Endpoint` / `Rinha.RawEndpoint`
     * `Rinha.LoadBalancerPlug` / `Rinha.LoadBalancer`
     * `Rinha.DebugRouter`
 

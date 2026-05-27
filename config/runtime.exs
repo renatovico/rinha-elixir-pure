@@ -30,8 +30,8 @@ if config_env() != :test do
   knn_probes =
     System.get_env("KNN_PROBES")
     |> case do
-      nil -> 16
-      "" -> 16
+      nil -> 12
+      "" -> 12
       v -> String.to_integer(v)
     end
 

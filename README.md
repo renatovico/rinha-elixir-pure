@@ -97,7 +97,7 @@ Runtime env var:
 - Official reference dataset: `resources/references.json.gz` (~48 MB compressed)
 - Indexed runtime file: `priv/ivf_index.bin`
 - IVF index format: version `1`, with `k=2048`, `n=3_000_000`, `stride=16`
-- Default KNN probe budget: `16` buckets (configurable via `KNN_PROBES`)
+- Default KNN probe budget: `12` buckets (configurable via `KNN_PROBES`)
 - Resource envelope in `docker-compose.yml`:
   - `api1`: `0.45 CPU`, `125 MB`
   - `api2`: `0.45 CPU`, `125 MB`
@@ -119,7 +119,7 @@ At build time, `resources/references.json.gz` is copied into `priv/resources/` s
 Runtime env vars:
 
 - `REFERENCES_PATH`: optional override for the references dataset file.
-- `KNN_PROBES`: IVF probe budget used by `Rinha.Domain.Models.KNN` (default `16`).
+- `KNN_PROBES`: IVF probe budget used by `Rinha.Domain.Models.KNN` (default `12`).
 
 ## Quickstart
 

@@ -57,7 +57,6 @@ This codebase follows a domain-first architecture with thin adapters.
 - HTTP/API adapters:
   - `Rinha.Endpoint`
   - `Rinha.RawEndpoint`
-  - `Rinha.FraudController`
   - `Rinha.DebugRouter`
 
 - Load-balancer adapters:

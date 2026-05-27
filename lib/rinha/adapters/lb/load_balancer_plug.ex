@@ -19,8 +19,7 @@ defmodule Rinha.LoadBalancerPlug do
   @impl true
   def call(%Plug.Conn{method: "POST", path_info: ["fraud-score"]} = conn, _opts) do
     with {:ok, body, conn} <- read_full_body(conn),
-         {:ok, payload} <- decode_json(body),
-         {:ok, response} <- call_peer(:remote_score, [payload]) do
+         {:ok, response} <- call_peer(:remote_score_binary, [body]) do
       conn
       |> put_resp_content_type(@json_ct)
       |> send_resp(200, response)
@@ -91,18 +90,23 @@ defmodule Rinha.LoadBalancerPlug do
     end
   end
 
-  defp decode_json(body) do
-    Jason.decode(body)
-  end
-
   defp call_peer(fun, args) do
     Rinha.LoadBalancer.ordered_peers()
     |> Enum.reduce_while({:error, :no_peer}, fn peer, _acc ->
       ensure_connected(peer)
 
       case rpc_call(peer, fun, args) do
-        {:ok, result} -> {:halt, {:ok, result}}
+        {:ok, {:ok, result}} when is_binary(result) ->
+          {:halt, {:ok, result}}
+
+        {:ok, {:error, :bad_json}} ->
+          {:halt, {:error, :bad_json}}
+
+        {:ok, result} when is_binary(result) ->
+          {:halt, {:ok, result}}
+
         {:error, :rpc_failed} -> {:cont, {:error, :rpc_failed}}
+        _ -> {:cont, {:error, :rpc_failed}}
       end
     end)
   end

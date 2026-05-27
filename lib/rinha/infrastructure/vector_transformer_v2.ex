@@ -52,7 +52,7 @@ defmodule Rinha.VectorTransformerV2 do
     customer = payload["customer"] || %{}
     merchant = payload["merchant"] || %{}
     terminal = payload["terminal"] || %{}
-    last_tx = payload["last_transaction"]
+    last_tx = normalize_last_transaction(payload["last_transaction"])
 
     amount = (transaction["amount"] || 0.0) * 1.0
     installments = (transaction["installments"] || 0) * 1.0
@@ -95,6 +95,11 @@ defmodule Rinha.VectorTransformerV2 do
   end
 
   # ---- helpers ---------------------------------------------------------
+
+  defp normalize_last_transaction(nil), do: nil
+  defp normalize_last_transaction(:null), do: nil
+  defp normalize_last_transaction(last_tx) when is_map(last_tx), do: last_tx
+  defp normalize_last_transaction(_), do: nil
 
   defp last_transaction_lanes(nil, _requested_at, _norm), do: {-@scale, -@scale}
 

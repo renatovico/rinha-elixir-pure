@@ -9,6 +9,7 @@ defmodule Rinha.LoadBalancer do
   use GenServer
 
   @default_peer_nodes ["api1@api1", "api2@api2"]
+  @fast_state_key {:rinha, :lb_fast_state}
 
   def start_link(opts \\ []) do
     case Keyword.get(opts, :name, __MODULE__) do
@@ -18,10 +19,36 @@ defmodule Rinha.LoadBalancer do
   end
 
   @doc "Returns configured peer nodes in round-robin order for this request."
-  def ordered_peers(server \\ __MODULE__), do: GenServer.call(server, :ordered_peers)
+  def ordered_peers(server \\ __MODULE__)
+
+  def ordered_peers(__MODULE__) do
+    owner = Process.whereis(__MODULE__)
+
+    case :persistent_term.get(@fast_state_key, nil) do
+      %{owner: ^owner, peers: peers, counter: counter} ->
+        ordered_from_tuple(peers, counter)
+
+      _ -> GenServer.call(__MODULE__, :ordered_peers)
+    end
+  end
+
+  def ordered_peers(server), do: GenServer.call(server, :ordered_peers)
 
   @doc "Returns configured peer nodes."
-  def peer_nodes(server \\ __MODULE__), do: GenServer.call(server, :peer_nodes)
+  def peer_nodes(server \\ __MODULE__)
+
+  def peer_nodes(__MODULE__) do
+    owner = Process.whereis(__MODULE__)
+
+    case :persistent_term.get(@fast_state_key, nil) do
+      %{owner: ^owner, peers: peers} ->
+        Tuple.to_list(peers)
+
+      _ -> GenServer.call(__MODULE__, :peer_nodes)
+    end
+  end
+
+  def peer_nodes(server), do: GenServer.call(server, :peer_nodes)
 
   @impl true
   def init(opts) do
@@ -34,8 +61,17 @@ defmodule Rinha.LoadBalancer do
 
     peers = List.to_tuple(peer_nodes)
     counter = :atomics.new(1, signed: false)
+    state = %{owner: self(), peers: peers, counter: counter}
 
-    {:ok, %{peers: peers, counter: counter}}
+    maybe_put_fast_state(state)
+
+    {:ok, state}
+  end
+
+  @impl true
+  def terminate(_reason, _state) do
+    maybe_clear_fast_state()
+    :ok
   end
 
   @impl true
@@ -45,14 +81,27 @@ defmodule Rinha.LoadBalancer do
 
   @impl true
   def handle_call(:ordered_peers, _from, state) do
-    size = tuple_size(state.peers)
-    start_idx = rem(:atomics.add_get(state.counter, 1, 1) - 1, size)
+    {:reply, ordered_from_tuple(state.peers, state.counter), state}
+  end
 
-    ordered =
-      0..(size - 1)
-      |> Enum.map(fn step -> elem(state.peers, rem(start_idx + step, size)) end)
+  defp ordered_from_tuple(peers, counter) do
+    size = tuple_size(peers)
+    start_idx = rem(:atomics.add_get(counter, 1, 1) - 1, size)
 
-    {:reply, ordered, state}
+    0..(size - 1)
+    |> Enum.map(fn step -> elem(peers, rem(start_idx + step, size)) end)
+  end
+
+  defp maybe_put_fast_state(state) do
+    if Process.whereis(__MODULE__) == self() do
+      :persistent_term.put(@fast_state_key, state)
+    end
+  end
+
+  defp maybe_clear_fast_state do
+    if Process.whereis(__MODULE__) == self() do
+      :persistent_term.erase(@fast_state_key)
+    end
   end
 
   defp configured_peer_nodes do

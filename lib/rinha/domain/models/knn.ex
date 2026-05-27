@@ -6,7 +6,7 @@ defmodule Rinha.Domain.Models.KNN do
   IVF buckets directly, without neural priors or hybrid orchestration.
   """
 
-  @default_probes 16
+  @default_probes 12
 
   @spec score([integer()]) :: 0..5
   def score(vector) when is_list(vector) do

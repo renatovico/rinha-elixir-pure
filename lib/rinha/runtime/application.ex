@@ -14,7 +14,6 @@ defmodule Rinha.Application do
   end
 
   defp start_api do
-    :persistent_term.put(:cluster_rr_counter, :atomics.new(1, signed: false))
     :ok = Rinha.Domain.Bootstrap.boot_api!()
 
     children =

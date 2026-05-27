@@ -58,6 +58,21 @@ flowchart LR
 
 For direct API mode (single node), `Rinha.RawEndpoint` handles `POST /fraud-score` locally.
 
+## KNN and Infrastructure Map
+
+The active scoring chain is:
+
+`Rinha.RawEndpoint` -> `Rinha.Domain.Fraud` -> `Rinha.Domain.Vectorization` -> `Rinha.Domain.Models.KNN` -> `Rinha.IvfScanner` -> `Rinha.KnnScanner` -> `Rinha.Domain.Decision`
+
+What each infrastructure module does:
+
+- `Rinha.IvfStore`: owns IVF metadata and bucket file reads from `priv/ivf_index.bin`.
+- `Rinha.IvfScanner`: picks nearest centroids and scans only those buckets.
+- `Rinha.KnnScanner`: hot inner loop that computes distances and top-5 labels.
+- `Rinha.Resources`: loads normalization constants and MCC risk map.
+
+Important: bloom filter and neural/hybrid scorer are not part of current runtime.
+
 ## Cluster and Health Endpoints
 
 - Public readiness via LB: `GET /ready` (on `:9999`).

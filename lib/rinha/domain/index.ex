@@ -14,10 +14,4 @@ defmodule Rinha.Domain.Index do
 
   @spec k() :: pos_integer()
   def k, do: Rinha.IvfStore.k()
-
-  @spec n() :: pos_integer()
-  def n, do: Rinha.IvfStore.n()
-
-  @spec stride() :: pos_integer()
-  def stride, do: Rinha.IvfStore.stride()
 end

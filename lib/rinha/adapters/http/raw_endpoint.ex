@@ -58,9 +58,6 @@ defmodule Rinha.RawEndpoint do
 
   @compile {:inline, put_resp_header_fast: 2, local_score: 1}
 
-  def remote_score(payload) when is_map(payload), do: local_score(payload)
-  def remote_score(_), do: @bad_json_400
-
   @spec remote_score_binary(binary()) :: {:ok, String.t()} | {:error, :bad_json}
   def remote_score_binary(body) when is_binary(body), do: score_response_binary(body)
   def remote_score_binary(_), do: {:error, :bad_json}

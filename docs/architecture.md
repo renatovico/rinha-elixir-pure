@@ -87,6 +87,37 @@ Infrastructure modules remain in place and are consumed behind domain facades:
 - `Rinha.Domain.Models.KNN` runs KNN counting through `Rinha.IvfScanner`.
 - `Rinha.Domain.Decision` maps fraud count (`0..5`) to the final JSON response.
 
+Call flow by module:
+
+- `Rinha.RawEndpoint`
+  - Reads raw body once.
+  - Calls `Rinha.Domain.Fraud.response_for_payload/1` (local API mode) or `remote_score_binary/1` via LB RPC.
+
+- `Rinha.Domain.Fraud`
+  - `transform_payload/1` -> `Rinha.Domain.Vectorization.transform/1`
+  - `score_vector/1` -> `Rinha.Domain.Models.KNN.score/1`
+  - `response_for_neighbors/1` -> `Rinha.Domain.Decision.response_for/1`
+
+- `Rinha.Domain.Models.KNN`
+  - Resolves probe budget (`KNN_PROBES`, default 12)
+  - Delegates to `Rinha.IvfScanner.score/2`
+
+- `Rinha.IvfScanner`
+  - Picks top centroids from `Rinha.Domain.Index.centroids/0`
+  - Reads bucket slices from `Rinha.Domain.Index.bucket_slice/1`
+  - Uses `Rinha.KnnScanner.scan_slice/3` + `Rinha.KnnScanner.merge_topk/1`
+  - Counts fraud labels with `Rinha.KnnScanner.fraud_count/1`
+
+- `Rinha.IvfStore`
+  - Loads IVF metadata once at boot (`build/1`)
+  - Serves `centroids/0` and `bucket_slice/1` from the `ivf_index.bin` file
+  - Keeps a shared file descriptor process and auto-reopens on `:terminated`
+
+## What Is Not Used
+
+- Bloom filter cache: removed from this branch (no bloom module in runtime path).
+- Neural prior/hybrid scorer: removed; KNN over IVF is the only scoring model.
+
 The implementation is correctness-first with official dataset compatibility:
 
 - Official vectors are represented in 14 dimensions; runtime uses stride 16 with two zero pads for scan efficiency.

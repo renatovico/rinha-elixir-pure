@@ -9,6 +9,7 @@ defmodule Rinha.IvfScanner do
   @probes_max 3
   @k_neighbors 5
   @big_dist 2_147_000_000
+  @max_probes 64
 
   @doc "Score a 16-int query with default probe budget."
   @spec score([integer()]) :: 0..5
@@ -19,6 +20,8 @@ defmodule Rinha.IvfScanner do
   @doc "Score with an explicit probe budget."
   @spec score([integer()], pos_integer()) :: 0..5
   def score(query, probes) when is_list(query) and is_integer(probes) and probes > 0 do
+    probes = min(probes, @max_probes)
+
     t0 = System.monotonic_time(:microsecond)
 
     centroid_ids = top_centroids(query, probes)
@@ -69,7 +72,7 @@ defmodule Rinha.IvfScanner do
     {q0, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15} =
       List.to_tuple(query)
 
-    init = List.duplicate({@big_dist, -1}, p)
+    init = topk_seed(p)
 
     centroid_loop(
       centroids,
@@ -95,6 +98,181 @@ defmodule Rinha.IvfScanner do
     )
     |> Enum.map(fn {_d, cid} -> cid end)
   end
+
+  defp topk_seed(1), do: [{@big_dist, -1}]
+  defp topk_seed(2), do: [{@big_dist, -1}, {@big_dist, -1}]
+  defp topk_seed(3), do: [{@big_dist, -1}, {@big_dist, -1}, {@big_dist, -1}]
+  defp topk_seed(4), do: [{@big_dist, -1}, {@big_dist, -1}, {@big_dist, -1}, {@big_dist, -1}]
+
+  defp topk_seed(5),
+    do: [{@big_dist, -1}, {@big_dist, -1}, {@big_dist, -1}, {@big_dist, -1}, {@big_dist, -1}]
+
+  defp topk_seed(6),
+    do: [
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1}
+    ]
+
+  defp topk_seed(7),
+    do: [
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1}
+    ]
+
+  defp topk_seed(8),
+    do: [
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1}
+    ]
+
+  defp topk_seed(9),
+    do: [
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1}
+    ]
+
+  defp topk_seed(10),
+    do: [
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1}
+    ]
+
+  defp topk_seed(11),
+    do: [
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1}
+    ]
+
+  defp topk_seed(12),
+    do: [
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1}
+    ]
+
+  defp topk_seed(13),
+    do: [
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1}
+    ]
+
+  defp topk_seed(14),
+    do: [
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1}
+    ]
+
+  defp topk_seed(15),
+    do: [
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1}
+    ]
+
+  defp topk_seed(16),
+    do: [
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1},
+      {@big_dist, -1}
+    ]
+
+  defp topk_seed(p), do: List.duplicate({@big_dist, -1}, p)
 
   defp centroid_loop(<<>>, _i, topk, _wd, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _),
     do: topk

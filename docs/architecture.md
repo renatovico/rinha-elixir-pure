@@ -111,7 +111,8 @@ Call flow by module:
 - `Rinha.IvfStore`
   - Loads IVF metadata once at boot (`build/1`)
   - Serves `centroids/0` and `bucket_slice/1` from the `ivf_index.bin` file
-  - Keeps a shared file descriptor process and auto-reopens on `:terminated`
+  - Uses `iommap` mapped reads (`:iommap.region_binary/3`) for bucket vectors/labels
+  - On mmap read failure, remaps the file and retries the bucket read once
 
 ## What Is Not Used
 

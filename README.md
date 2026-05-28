@@ -66,7 +66,7 @@ The active scoring chain is:
 
 What each infrastructure module does:
 
-- `Rinha.IvfStore`: owns IVF metadata and bucket file reads from `priv/ivf_index.bin`.
+- `Rinha.IvfStore`: owns IVF metadata and bucket reads from `priv/ivf_index.bin` via `iommap`.
 - `Rinha.IvfScanner`: picks nearest centroids and scans only those buckets.
 - `Rinha.KnnScanner`: hot inner loop that computes distances and top-5 labels.
 - `Rinha.Resources`: loads normalization constants and MCC risk map.
@@ -119,6 +119,26 @@ Runtime env var:
   - `lb`: `0.10 CPU`, `100 MB`
   - total: `1.00 CPU`, `350 MB`
 
+## Index Preprocess
+
+Generate the runtime index from the official references dataset:
+
+```bash
+# Full pipeline (references.json.gz -> priv/ivf_index.bin)
+make preprocess
+
+# Optional split steps
+make preprocess-refs
+make ivf-index
+```
+
+Optional parameters:
+
+- `REFS_GZ=/path/to/references.json.gz` overrides source dataset path.
+- `IVF_K=2048` number of centroids.
+- `IVF_ITERS=15` k-means iterations.
+- `IVF_BATCH=20000` k-means batch size.
+
 ## Data Files
 
 Reference files shipped in this repo:
@@ -135,6 +155,10 @@ Runtime env vars:
 
 - `REFERENCES_PATH`: optional override for the references dataset file.
 - `KNN_PROBES`: IVF probe budget used by `Rinha.Domain.Models.KNN` (default `12`).
+
+IVF index I/O backend:
+
+- Runtime uses `iommap` only (no `:file.pread` fallback path in the scorer).
 
 ## Quickstart
 
@@ -162,9 +186,9 @@ make docker-test
 
 Current targets from `Makefile`:
 
-- `deps`, `compile`, `test`, `run`
+- `deps`, `compile`, `test`, `preprocess`, `preprocess-refs`, `ivf-index`, `run`
 - `smoke`, `load`
 - `debug-ready`, `debug-profile`, `debug-profile-reset`
 - `debug-fixtures`, `debug-score`, `debug-simulate`, `debug-cluster`
 - `docker-build`, `docker-up`, `docker-down`, `docker-test`, `docker-load`
-- `docker-stats`, `docker-logs`, `docker-cycle`, `clean`
+- `docker-stats`, `docker-logs`, `docker-cycle`, `clean`, `distclean`

@@ -24,78 +24,64 @@ defmodule Rinha.IvfStore do
         System.get_env("IVF_INDEX_PATH") ||
         Path.join(:code.priv_dir(:rinha), "ivf_index.bin")
 
-    Logger.info("Loading IVF index metadata from #{path} (references=#{references_path})...")
-    payload = load_metadata(path)
-    {fd_owner, fd} = open_shared_fd(path)
+    Logger.info(
+      "Loading IVF index metadata from #{path} (references=#{references_path}, io=iommap)..."
+    )
+
+    handle = open_mapping!(path)
+    payload = load_metadata(path, handle)
 
     if is_map(previous) do
-      maybe_stop_fd_owner(previous)
+      maybe_close_mapping(previous)
     end
 
-    payload = Map.merge(payload, %{fd_owner: fd_owner, fd: fd})
+    payload = Map.put(payload, :iommap_handle, handle)
 
     :persistent_term.put(@persistent_key, payload)
 
     Logger.info(
-        "IVF store ready: v#{payload.version} k=#{payload.k} n=#{payload.n} " <>
-          "stride=#{payload.stride} centroids=#{byte_size(payload.centroids)}B " <>
-          "vectors=ondemand labels=ondemand norms=#{payload.centroid_norms != nil}"
+      "IVF store ready: v#{payload.version} k=#{payload.k} n=#{payload.n} " <>
+        "stride=#{payload.stride} centroids=#{byte_size(payload.centroids)}B " <>
+        "vectors=ondemand labels=ondemand io=iommap norms=#{payload.centroid_norms != nil}"
     )
 
     :ok
   end
 
-  defp load_metadata(path) do
-    {:ok, fd} = :file.open(path, [:read, :binary])
+  defp load_metadata(path, handle) do
+    case read_exact_mmap(handle, 0, 16) do
+      {:ok, <<k::little-32, n::little-32, stride::little-32, _::little-32>>} ->
+        load_v1(path, handle, k, n, stride)
 
-    try do
-      case read_exact(fd, 0, 16) do
-        <<k::little-32, n::little-32, stride::little-32, _::little-32>> ->
-          load_v1(fd, path, k, n, stride)
+      {:ok, other} ->
+        raise "unsupported IVF index format (expected v1 header, got #{inspect(other)})"
 
-        other ->
-          raise "unsupported IVF index format (expected v1 header, got #{inspect(other)})"
-      end
-    after
-      :ok = :file.close(fd)
+      {:error, reason} ->
+        raise "IVF metadata read failed: #{inspect(reason)}"
     end
   end
 
-  defp open_shared_fd(path) do
-    parent = self()
+  defp open_mapping!(path) do
+    case :iommap.open(String.to_charlist(path), :read, [:shared]) do
+      {:ok, handle} ->
+        handle
 
-    owner =
-      spawn(fn ->
-        case :file.open(path, [:read, :binary]) do
-          {:ok, fd} ->
-            send(parent, {:ivf_fd_ready, self(), fd})
-            fd_owner_loop(fd)
+      {:error, reason} ->
+        raise "failed to open IVF iommap handle: #{inspect(reason)}"
 
-          {:error, reason} ->
-            send(parent, {:ivf_fd_error, self(), reason})
-        end
-      end)
-
-    receive do
-      {:ivf_fd_ready, ^owner, fd} ->
-        {owner, fd}
-
-      {:ivf_fd_error, ^owner, reason} ->
-        raise "failed to open IVF index fd: #{inspect(reason)}"
-    after
-      5_000 ->
-        raise "timed out opening IVF index fd"
+      other ->
+        raise "unexpected iommap.open/3 return: #{inspect(other)}"
     end
   end
 
-  defp load_v1(fd, path, k, n, stride) do
+  defp load_v1(path, handle, k, n, stride) do
     centroids_bytes = k * stride * 2
     offsets_bytes = (k + 1) * 4
     vectors_offset = 12 + centroids_bytes + offsets_bytes
     labels_offset = vectors_offset + n * stride * 2
 
-    centroids = read_exact(fd, 12, centroids_bytes)
-    offsets_bin = read_exact(fd, 12 + centroids_bytes, offsets_bytes)
+    centroids = read_exact_mmap!(handle, 12, centroids_bytes)
+    offsets_bin = read_exact_mmap!(handle, 12 + centroids_bytes, offsets_bytes)
 
     %{
       version: 1,
@@ -114,33 +100,17 @@ defmodule Rinha.IvfStore do
     }
   end
 
-  defp fd_owner_loop(fd) do
-    receive do
-      {:stop, from, ref} ->
-        _ = :file.close(fd)
-        send(from, {:stopped, ref})
-
-      _other ->
-        fd_owner_loop(fd)
-    end
-  end
-
-  defp maybe_stop_fd_owner(%{fd_owner: pid}) when is_pid(pid) do
-    if Process.alive?(pid) do
-      ref = make_ref()
-      send(pid, {:stop, self(), ref})
-
-      receive do
-        {:stopped, ^ref} -> :ok
-      after
-        500 -> Process.exit(pid, :kill)
-      end
-    else
+  defp maybe_close_mapping(%{iommap_handle: handle}) when not is_nil(handle) do
+    try do
+      _ = :iommap.close(handle)
       :ok
+    catch
+      :error, _ -> :ok
+      :exit, _ -> :ok
     end
   end
 
-  defp maybe_stop_fd_owner(_), do: :ok
+  defp maybe_close_mapping(_), do: :ok
 
   defp decode_offsets(bin), do: for(<<o::little-32 <- bin>>, do: o)
 
@@ -167,71 +137,78 @@ defmodule Rinha.IvfStore do
   def version, do: get().version
 
   def bucket_slice(cid) do
-    %{offsets: o, fd: fd, vectors_offset: voff, labels_offset: loff, stride: stride, path: path} = get()
-    start = elem(o, cid)
-    stop = elem(o, cid + 1)
+    store = get()
+
+    start = elem(store.offsets, cid)
+    stop = elem(store.offsets, cid + 1)
     len = stop - start
 
     if len <= 0 do
       {<<>>, <<>>, 0}
     else
-      vectors_bytes = len * stride * 2
-
-      case {
-             read_exact_result(fd, voff + start * stride * 2, vectors_bytes),
-             read_exact_result(fd, loff + start, len)
-           } do
-        {{:ok, vectors}, {:ok, labels}} ->
+      case read_bucket(store, start, len) do
+        {:ok, vectors, labels} ->
           {vectors, labels, len}
 
-        {{:error, :terminated}, _} ->
-          recover_and_retry(path, cid)
-
-        {_, {:error, :terminated}} ->
-          recover_and_retry(path, cid)
-
-        {{:error, reason}, _} ->
-          raise "IVF read failed: #{inspect(reason)}"
-
-        {_, {:error, reason}} ->
-          raise "IVF read failed: #{inspect(reason)}"
+        {:error, reason} ->
+          recover_and_retry(store.path, cid, reason)
       end
     end
   end
 
-  defp recover_and_retry(path, cid) do
-    Logger.warning("IVF file descriptor terminated, reopening #{path}")
+  defp read_bucket(store, start, len) do
+    vectors_bytes = len * store.stride * 2
+    vectors_offset = store.vectors_offset + start * store.stride * 2
+    labels_offset = store.labels_offset + start
+
+    with {:ok, vectors} <- read_exact_mmap(store.iommap_handle, vectors_offset, vectors_bytes),
+         {:ok, labels} <- read_exact_mmap(store.iommap_handle, labels_offset, len) do
+      {:ok, vectors, labels}
+    end
+  end
+
+  defp recover_and_retry(path, cid, reason) do
+    Logger.warning("IVF mmap read failed (#{inspect(reason)}), remapping #{path}")
     :ok = build(path: path)
 
-    %{offsets: o, fd: fd, vectors_offset: voff, labels_offset: loff, stride: stride} = get()
+    store = get()
 
-    start = elem(o, cid)
-    stop = elem(o, cid + 1)
+    start = elem(store.offsets, cid)
+    stop = elem(store.offsets, cid + 1)
     len = stop - start
 
     if len <= 0 do
       {<<>>, <<>>, 0}
     else
-      vectors_bytes = len * stride * 2
-      vectors = read_exact(fd, voff + start * stride * 2, vectors_bytes)
-      labels = read_exact(fd, loff + start, len)
-      {vectors, labels, len}
+      case read_bucket(store, start, len) do
+        {:ok, vectors, labels} ->
+          {vectors, labels, len}
+
+        {:error, retry_reason} ->
+          raise "IVF mmap read failed after retry: #{inspect(retry_reason)}"
+      end
     end
   end
 
-  defp read_exact_result(fd, offset, len) do
-    case :file.pread(fd, offset, len) do
-      {:ok, bin} when byte_size(bin) == len -> {:ok, bin}
-      {:ok, _short} -> {:error, :short_read}
-      {:error, reason} -> {:error, reason}
+  defp read_exact_mmap(handle, offset, len) do
+    try do
+      case :iommap.region_binary(handle, offset, len) do
+        {:ok, bin} when byte_size(bin) == len -> {:ok, bin}
+        {:ok, _short} -> {:error, :short_read}
+        {:error, reason} -> {:error, reason}
+        other -> {:error, {:unexpected_iommap_read_result, other}}
+      end
+    catch
+      :error, reason -> {:error, reason}
+      :exit, reason -> {:error, reason}
     end
   end
 
-  defp read_exact(fd, offset, len) do
-    case read_exact_result(fd, offset, len) do
+  defp read_exact_mmap!(handle, offset, len) do
+    case read_exact_mmap(handle, offset, len) do
       {:ok, bin} -> bin
       {:error, :short_read} -> raise "short read from IVF index"
-      {:error, reason} -> raise "IVF read failed: #{inspect(reason)}"
+      {:error, reason} -> raise "IVF metadata read failed: #{inspect(reason)}"
     end
   end
 end

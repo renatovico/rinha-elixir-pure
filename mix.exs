@@ -34,6 +34,9 @@ defmodule Rinha.MixProject do
       {:phoenix, "~> 1.7"},
       {:plug_cowboy, "~> 2.7"},
       {:jason, "~> 1.4"},
+      {:iommap, "~> 1.1"},
+      {:nx, "~> 0.12", only: :preprocess, runtime: false},
+      {:exla, "~> 0.12", only: :preprocess, runtime: false},
       {:tidewave, "~> 0.4", only: :dev}
     ]
   end

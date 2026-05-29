@@ -155,6 +155,13 @@ Runtime env vars:
 
 - `REFERENCES_PATH`: optional override for the references dataset file.
 - `KNN_PROBES`: IVF probe budget used by `Rinha.Domain.Models.KNN` (default `12`).
+- `N3_BORDERLINE_CALIBRATION`: enable/disable narrow `n=3 -> n=2` boundary calibration (default `true`; set `0|false|off` to disable).
+
+Cluster defaults in `docker-compose.yml`:
+
+- `KNN_PROBES` defaults to `12` for stable p99 and low HTTP errors.
+- To run high-accuracy mode locally, override on demand:
+  - `KNN_PROBES=64 N3_BORDERLINE_CALIBRATION=true make docker-cycle`
 
 IVF index I/O backend:
 

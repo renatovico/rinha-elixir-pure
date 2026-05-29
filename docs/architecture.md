@@ -24,6 +24,7 @@ This codebase follows a domain-first architecture with thin adapters.
 
 - `Rinha.Domain.Models.*`
   - `KNN`: nearest-neighbor fraud counting over the IVF index.
+  - `BorderlineCalibration`: optional narrow correction for `n=3` quantization-boundary cases.
 
 - `Rinha.Domain.Vectorization`
   - Payload to fixed 16-lane vector conversion.
@@ -96,6 +97,7 @@ Call flow by module:
 - `Rinha.Domain.Fraud`
   - `transform_payload/1` -> `Rinha.Domain.Vectorization.transform/1`
   - `score_vector/1` -> `Rinha.Domain.Models.KNN.score/1`
+  - `BorderlineCalibration.adjust/2` -> optional `n=3 -> n=2` demotion for a narrow profile (guarded by `N3_BORDERLINE_CALIBRATION`)
   - `response_for_neighbors/1` -> `Rinha.Domain.Decision.response_for/1`
 
 - `Rinha.Domain.Models.KNN`

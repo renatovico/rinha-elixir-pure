@@ -29,6 +29,8 @@ services:
       HTTP_ACCEPTORS: "32"
       HTTP_MAX_CONNECTIONS: "8192"
       PORT: "4000"
+      KNN_PROBES: "${KNN_PROBES:-12}"
+      N3_BORDERLINE_CALIBRATION: "${N3_BORDERLINE_CALIBRATION:-true}"
       RELEASE_DISTRIBUTION: sname
       RELEASE_NODE: api1
       RELEASE_COOKIE: rinha-secret-cookie
@@ -53,6 +55,8 @@ services:
       HTTP_ACCEPTORS: "32"
       HTTP_MAX_CONNECTIONS: "8192"
       PORT: "4000"
+      KNN_PROBES: "${KNN_PROBES:-12}"
+      N3_BORDERLINE_CALIBRATION: "${N3_BORDERLINE_CALIBRATION:-true}"
       RELEASE_DISTRIBUTION: sname
       RELEASE_NODE: api2
       RELEASE_COOKIE: rinha-secret-cookie

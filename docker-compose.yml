@@ -1,5 +1,5 @@
 x-api: &api
-  image: renatoelias/rinha-elixir-pure:submission-20260529-1
+  image: renatoelias/rinha-elixir-pure:submission-20260530-readyfix
   environment:
     READY_FILE: /tmp/ready
     ERL_CRASH_DUMP_SECONDS: "0"

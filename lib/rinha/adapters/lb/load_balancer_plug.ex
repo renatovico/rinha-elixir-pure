@@ -96,6 +96,12 @@ defmodule Rinha.LoadBalancerPlug do
       ensure_connected(peer)
 
       case rpc_call(peer, fun, args) do
+        {:ok, true} ->
+          {:halt, {:ok, true}}
+
+        {:ok, false} ->
+          {:cont, {:error, :rpc_failed}}
+
         {:ok, {:ok, result}} when is_binary(result) ->
           {:halt, {:ok, result}}
 

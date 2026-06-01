@@ -199,3 +199,37 @@ Current targets from `Makefile`:
 - `debug-fixtures`, `debug-score`, `debug-simulate`, `debug-cluster`
 - `docker-build`, `docker-up`, `docker-down`, `docker-test`, `docker-load`
 - `docker-stats`, `docker-logs`, `docker-cycle`, `clean`, `distclean`
+
+## Aggressive Local Validation
+
+To reduce surprises in the official run, use matrix-style load validation
+against all three datasets before publishing an image tag.
+
+Recommended sequence:
+
+```bash
+# Official-like run (3 datasets, 900 rps, 120s each)
+make docker-load-official
+
+# Aggressive burn-in (3 datasets, 1000 rps, 300s each)
+make docker-load-aggressive
+```
+
+Or run both in sequence:
+
+```bash
+make docker-load-matrix
+```
+
+Result files written by these runs:
+
+- `test/results-main.json`
+- `test/results-alt1.json`
+- `test/results-alt2.json`
+- `test/results-main-burn.json`
+- `test/results-alt1-burn.json`
+- `test/results-alt2-burn.json`
+
+These targets use `test/k6/matrix.js`, which accepts env overrides such as
+`TARGET_RPS`, `HOLD_STAGE`, `PRE_ALLOCATED_VUS`, `MAX_VUS`, and
+`REQ_TIMEOUT_MS` for quick stress-profile tuning.

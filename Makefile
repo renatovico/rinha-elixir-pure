@@ -1,6 +1,6 @@
 .PHONY: help deps compile test preprocess preprocess-refs ivf-index run smoke load debug-ready debug-profile debug-profile-reset debug-fixtures debug-score debug-simulate debug-cluster \
-        docker-build docker-up docker-down docker-test docker-load \
-        docker-stats docker-logs docker-cycle clean distclean
+		docker-build docker-up docker-down docker-test docker-load docker-wait-ready docker-load-official docker-load-aggressive docker-load-matrix \
+		docker-stats docker-logs docker-cycle clean distclean
 .DEFAULT_GOAL := help
 
 REFS_GZ   ?= resources/references.json.gz
@@ -116,24 +116,41 @@ docker-logs: ## Follow logs for the cluster
 	docker compose logs -f --tail 100
 
 docker-test: docker-up ## k6 smoke test against the cluster
-	@echo "Waiting for instances to become healthy..."
-	@for i in $$(seq 1 60); do \
-	  if curl -sf $(CLUSTER_URL)/ready > /dev/null 2>&1; then \
-	    echo "Cluster ready after $${i}s"; break; \
-	  fi; \
-	  sleep 1; \
-	done
+	@$(MAKE) docker-wait-ready
 	k6 run -e BASE_URL=$(CLUSTER_URL) test/k6/smoke.js
 
 docker-load: docker-up ## k6 load test against the cluster (Rinha submission run)
+	@$(MAKE) docker-wait-ready
+	k6 run -e BASE_URL=$(CLUSTER_URL) test/k6/test.js
+
+docker-wait-ready: ## Wait until LB /ready returns 2xx
 	@echo "Waiting for instances to become healthy..."
-	@for i in $$(seq 1 60); do \
+	@ok=0; \
+	for i in $$(seq 1 60); do \
 	  if curl -sf $(CLUSTER_URL)/ready > /dev/null 2>&1; then \
-	    echo "Cluster ready after $${i}s"; break; \
+	    echo "Cluster ready after $${i}s"; \
+	    ok=1; \
+	    break; \
 	  fi; \
 	  sleep 1; \
-	done
-	k6 run -e BASE_URL=$(CLUSTER_URL) test/k6/test.js
+	done; \
+	if [ $$ok -ne 1 ]; then \
+	  echo "Cluster did not become ready in 60s"; \
+	  docker compose ps; \
+	  exit 1; \
+	fi
+
+docker-load-official: docker-up docker-wait-ready ## Official-like matrix: 3 datasets, 900rps, 120s each
+	k6 run -e BASE_URL=$(CLUSTER_URL) -e DATA_FILE=./test-data.json -e TARGET_RPS=900 -e HOLD_STAGE=120s -e REQ_TIMEOUT_MS=2001 -e RESULTS_FILE=test/results-main.json test/k6/matrix.js
+	k6 run -e BASE_URL=$(CLUSTER_URL) -e DATA_FILE=./test-data-alt1.json -e TARGET_RPS=900 -e HOLD_STAGE=120s -e REQ_TIMEOUT_MS=2001 -e RESULTS_FILE=test/results-alt1.json test/k6/matrix.js
+	k6 run -e BASE_URL=$(CLUSTER_URL) -e DATA_FILE=./test-data-alt2.json -e TARGET_RPS=900 -e HOLD_STAGE=120s -e REQ_TIMEOUT_MS=2001 -e RESULTS_FILE=test/results-alt2.json test/k6/matrix.js
+
+docker-load-aggressive: docker-up docker-wait-ready ## Aggressive burn-in matrix: 3 datasets, 1000rps, 300s each
+	k6 run -e BASE_URL=$(CLUSTER_URL) -e DATA_FILE=./test-data.json -e TARGET_RPS=1000 -e HOLD_STAGE=300s -e PRE_ALLOCATED_VUS=140 -e MAX_VUS=450 -e REQ_TIMEOUT_MS=2001 -e RESULTS_FILE=test/results-main-burn.json test/k6/matrix.js
+	k6 run -e BASE_URL=$(CLUSTER_URL) -e DATA_FILE=./test-data-alt1.json -e TARGET_RPS=1000 -e HOLD_STAGE=300s -e PRE_ALLOCATED_VUS=140 -e MAX_VUS=450 -e REQ_TIMEOUT_MS=2001 -e RESULTS_FILE=test/results-alt1-burn.json test/k6/matrix.js
+	k6 run -e BASE_URL=$(CLUSTER_URL) -e DATA_FILE=./test-data-alt2.json -e TARGET_RPS=1000 -e HOLD_STAGE=300s -e PRE_ALLOCATED_VUS=140 -e MAX_VUS=450 -e REQ_TIMEOUT_MS=2001 -e RESULTS_FILE=test/results-alt2-burn.json test/k6/matrix.js
+
+docker-load-matrix: docker-load-official docker-load-aggressive ## Run official-like then aggressive matrix
 
 docker-cycle: docker-down docker-up docker-load ## Full cycle: rebuild → load test
 	docker compose down

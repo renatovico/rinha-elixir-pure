@@ -18,9 +18,10 @@ defmodule Rinha.Domain.Fraud do
 
   @spec response_for_payload(map()) :: String.t()
   def response_for_payload(payload) when is_map(payload) do
-    payload
-    |> score_payload()
-    |> Map.fetch!(:response)
+    vector = transform_payload(payload)
+    raw_neighbors = score_vector(vector)
+    neighbors = Rinha.Domain.Models.BorderlineCalibration.adjust(vector, raw_neighbors)
+    response_for_neighbors(neighbors)
   end
 
   @impl true

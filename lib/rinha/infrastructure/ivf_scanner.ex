@@ -21,13 +21,15 @@ defmodule Rinha.IvfScanner do
   @spec score([integer()], pos_integer()) :: 0..5
   def score(query, probes) when is_list(query) and is_integer(probes) and probes > 0 do
     probes = min(probes, @max_probes)
+    query16 = List.to_tuple(query) |> ensure_16!()
+    centroids = Rinha.Domain.Index.centroids()
 
     t0 = System.monotonic_time(:microsecond)
 
-    centroid_ids = top_centroids(query, probes)
+    centroid_topk = top_centroids(centroids, query16, probes)
     t1 = System.monotonic_time(:microsecond)
 
-    {topk, refs_scanned} = scan_buckets(centroid_ids, query, init_topk(), 0)
+    {topk, refs_scanned} = scan_buckets(centroid_topk, query16, init_topk(), 0)
 
     t2 = System.monotonic_time(:microsecond)
 
@@ -37,12 +39,20 @@ defmodule Rinha.IvfScanner do
     n
   end
 
-  defp scan_buckets(centroid_ids, query, init_acc, init_count) do
-    Enum.reduce(centroid_ids, {init_acc, init_count}, fn cid, {acc, count} ->
-      {v_slice, l_slice, len} = Rinha.Domain.Index.bucket_slice(cid)
-      bucket_topk = Rinha.KnnScanner.scan_slice(v_slice, l_slice, query)
-      merged = Rinha.KnnScanner.merge_topk([acc, bucket_topk])
-      {merged, count + len}
+  defp scan_buckets(centroid_topk, query16, init_acc, init_count) do
+    Enum.reduce(centroid_topk, {init_acc, init_count}, fn
+      {_dist, cid}, {acc, count} when cid >= 0 ->
+        {v_slice, l_slice, len} = Rinha.Domain.Index.bucket_slice(cid)
+
+        if len > 0 do
+          updated = Rinha.KnnScanner.scan_slice_prepared(v_slice, l_slice, query16, acc)
+          {updated, count + len}
+        else
+          {acc, count}
+        end
+
+      {_dist, _cid}, {acc, count} ->
+        {acc, count}
     end)
   end
 
@@ -66,11 +76,11 @@ defmodule Rinha.IvfScanner do
     List.duplicate({@big_dist, 0}, @k_neighbors)
   end
 
-  defp top_centroids(query, p) do
-    centroids = Rinha.Domain.Index.centroids()
-
-    {q0, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15} =
-      List.to_tuple(query)
+  defp top_centroids(
+         centroids,
+         {q0, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15},
+         p
+       ) do
 
     init = topk_seed(p)
 
@@ -96,8 +106,12 @@ defmodule Rinha.IvfScanner do
       q14,
       q15
     )
-    |> Enum.map(fn {_d, cid} -> cid end)
   end
+
+  defp ensure_16!({_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _} = t), do: t
+
+  defp ensure_16!(other),
+    do: raise("IvfScanner expects a 16-int query, got #{inspect(other)}")
 
   defp topk_seed(1), do: [{@big_dist, -1}]
   defp topk_seed(2), do: [{@big_dist, -1}, {@big_dist, -1}]

@@ -79,21 +79,20 @@ defmodule Rinha.RawEndpoint do
   if Code.ensure_loaded?(:json) and function_exported?(:json, :decode, 1) do
     defp decode_payload(body) do
       try do
-        {:ok, body |> :json.decode() |> denull()}
+        case :json.decode(body) do
+          payload when is_map(payload) -> {:ok, payload}
+          _ -> {:error, :bad_json}
+        end
       rescue
         _ -> {:error, :bad_json}
       end
     end
-
-    defp denull(:null), do: nil
-    defp denull(map) when is_map(map), do: :maps.map(fn _, v -> denull(v) end, map)
-    defp denull(list) when is_list(list), do: Enum.map(list, &denull/1)
-    defp denull(other), do: other
   else
     defp decode_payload(body) do
       case Jason.decode(body) do
-        {:ok, payload} -> {:ok, payload}
+        {:ok, payload} when is_map(payload) -> {:ok, payload}
         {:error, _} -> {:error, :bad_json}
+        _ -> {:error, :bad_json}
       end
     end
   end

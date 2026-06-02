@@ -28,8 +28,17 @@ defmodule Rinha.KnnScanner do
   """
   @spec scan_slice(binary, binary, [integer()]) :: [{integer(), 0 | 1}]
   def scan_slice(vectors_slice, labels_slice, query) do
-    {q0, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15} =
-      List.to_tuple(query) |> ensure_16!()
+    query16 = List.to_tuple(query) |> ensure_16!()
+    scan_slice_prepared(vectors_slice, labels_slice, query16)
+  end
+
+  @doc "Scan slice using a prevalidated 16-int query tuple."
+  @spec scan_slice_prepared(binary, binary, tuple()) :: [{integer(), 0 | 1}]
+  def scan_slice_prepared(
+        vectors_slice,
+        labels_slice,
+        {q0, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15}
+      ) do
 
     init_topk = List.duplicate({@big_dist, 0}, @k)
 
@@ -57,13 +66,55 @@ defmodule Rinha.KnnScanner do
     )
   end
 
+  @doc "Scan slice into an existing sorted top-K list."
+  @spec scan_slice_prepared(binary, binary, tuple(), [{integer(), 0 | 1}]) :: [{integer(), 0 | 1}]
+  def scan_slice_prepared(
+        vectors_slice,
+        labels_slice,
+        {q0, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15},
+        topk
+      ) do
+    {worst_dist, _} = :lists.last(topk)
+
+    scan_chunk(
+      vectors_slice,
+      labels_slice,
+      topk,
+      worst_dist,
+      q0,
+      q1,
+      q2,
+      q3,
+      q4,
+      q5,
+      q6,
+      q7,
+      q8,
+      q9,
+      q10,
+      q11,
+      q12,
+      q13,
+      q14,
+      q15
+    )
+  end
+
   @doc "Merge several top-K lists, returning the global top-K."
   @spec merge_topk([[{integer(), 0 | 1}]]) :: [{integer(), 0 | 1}]
+  def merge_topk([left, right]), do: merge_topk_pair(left, right)
+
   def merge_topk(lists) do
     lists
     |> List.flatten()
     |> Enum.sort_by(fn {d, _} -> d end)
     |> Enum.take(@k)
+  end
+
+  @doc "Merge two sorted top-K lists, returning the global top-K."
+  @spec merge_topk_pair([{integer(), 0 | 1}], [{integer(), 0 | 1}]) :: [{integer(), 0 | 1}]
+  def merge_topk_pair(left, right) do
+    merge_topk_pair_loop(left, right, [], @k)
   end
 
   @doc "Count fraud labels in a top-K list."
@@ -78,6 +129,31 @@ defmodule Rinha.KnnScanner do
 
   defp ensure_16!(other),
     do: raise("KnnScanner expects a 16-int query, got #{inspect(other)}")
+
+  defp merge_topk_pair_loop(_left, _right, acc, 0), do: :lists.reverse(acc)
+  defp merge_topk_pair_loop([], [], acc, _remaining), do: :lists.reverse(acc)
+
+  defp merge_topk_pair_loop([], [h | t], acc, remaining) do
+    merge_topk_pair_loop([], t, [h | acc], remaining - 1)
+  end
+
+  defp merge_topk_pair_loop([h | t], [], acc, remaining) do
+    merge_topk_pair_loop(t, [], [h | acc], remaining - 1)
+  end
+
+  defp merge_topk_pair_loop(
+         [{dl, _} = left_h | left_t],
+         right = [{dr, _} | _],
+         acc,
+         remaining
+       )
+       when dl <= dr do
+    merge_topk_pair_loop(left_t, right, [left_h | acc], remaining - 1)
+  end
+
+  defp merge_topk_pair_loop(left = [_ | _], [right_h | right_t], acc, remaining) do
+    merge_topk_pair_loop(left, right_t, [right_h | acc], remaining - 1)
+  end
 
   # End of binary: return current top-K.
   defp scan_chunk(<<>>, <<>>, topk, _wd, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _),

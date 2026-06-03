@@ -21,13 +21,9 @@ This codebase follows a domain-first architecture with thin adapters.
 - `Rinha.Domain.Fraud`
   - Core use case orchestration for scoring payloads.
   - Coordinates vectorization, model scoring, and decision rendering.
-  - Supports configurable scoring model via `SCORING_MODEL` env var (`xgb`, `knn`, or `nn`).
 
 - `Rinha.Domain.Models.*`
-  - `RandomForest`: pure-Elixir tree ensemble scorer for exported XGBoost models (default).
-  - `NeuralNet`: optional MLP fraud classifier.
-  - `KNN`: nearest-neighbor fraud counting over the IVF index.
-  - `BorderlineCalibration`: optional KNN-specific correction for `n=3` quantization-boundary cases.
+  - `XGBoost`: pure-Elixir runtime evaluator for exported XGBoost trees.
 
 - `Rinha.Domain.Vectorization`
   - Payload to fixed 16-lane vector conversion.
@@ -88,10 +84,7 @@ Infrastructure modules remain in place and are consumed behind domain facades:
 
 - Payload enters via HTTP adapter and is passed to `Rinha.Domain.Fraud`.
 - `Rinha.Domain.Vectorization` converts payload to a 16-lane signed int vector.
-- Model scoring depends on `SCORING_MODEL` config (default: `:random_forest` / `xgb`):
-  - `:random_forest` -> `Rinha.Domain.Models.RandomForest.score/1` (XGBoost tree ensemble)
-  - `:nn` -> `Rinha.Domain.Models.NeuralNet.score/1` (neural network)
-  - `:knn` -> `Rinha.Domain.Models.KNN.score/1` (k-nearest neighbors)
+- Model scoring always uses `Rinha.Domain.Models.XGBoost.score/1`.
 - `Rinha.Domain.Decision` maps fraud count (`0..5`) to the final JSON response.
 
 Call flow by module:
@@ -102,36 +95,24 @@ Call flow by module:
 
 - `Rinha.Domain.Fraud`
   - `transform_payload/1` -> `Rinha.Domain.Vectorization.transform/1`
-  - `score_vector/1` -> `RandomForest.score/1` (default), `NeuralNet.score/1`, or `KNN.score/1`
-  - `BorderlineCalibration.adjust/2` -> KNN-only, skipped for XGBoost/neural network
+  - `score_vector/1` -> `Rinha.Domain.Models.XGBoost.score/1`
   - `response_for_neighbors/1` -> `Rinha.Domain.Decision.response_for/1`
 
 ### XGBoost Tree Ensemble (default)
 
-- `Rinha.Domain.Models.RandomForest`
+- `Rinha.Domain.Models.XGBoost`
   - Evaluates compact exported XGBoost trees in pure Elixir.
   - Dequantizes int16 runtime vectors back to normalized floats.
   - Maps fraud probability to the `0..5` decision score.
 
-- `Rinha.RandomForestStore`
-  - Loads `priv/random_forest.bin` at boot.
+- `Rinha.XGBoostStore`
+  - Loads `priv/xgboost.bin` at boot.
   - Keeps tree node payloads as compact binaries in `persistent_term`.
 
 - Training:
-  - `MIX_ENV=preprocess mix rinha.train_xgb --rounds 1500 --depth 10 --eta 0.08 --threads 8 --eval-sample 100000 --output priv/random_forest.bin`
+  - `MIX_ENV=preprocess mix rinha.train_xgb --rounds 1500 --depth 10 --eta 0.08 --threads 8 --eval-sample 100000 --output priv/xgboost.bin`
 
-### Neural Network Model (optional)
-
-- `Rinha.Domain.Models.NeuralNet`
-  - MLP model exported to `priv/nn_weights.bin`.
-  - Dequantizes int16 input to float, runs forward pass
-  - Maps fraud probability to 0..5 score
-
-- `Rinha.NeuralNetStore`
-  - Loads weights from `priv/nn_weights.bin` at boot
-  - Stores weights in persistent_term for fast access
-
-### KNN Model (optional, via SCORING_MODEL=knn)
+### KNN Index Utilities (not active request path)
 
 - `Rinha.Domain.Models.KNN`
   - Resolves probe budget (`KNN_PROBES`, default 12)
@@ -149,18 +130,10 @@ Call flow by module:
   - Uses `iommap` mapped reads (`:iommap.region_binary/3`) for bucket vectors/labels
   - On mmap read failure, remaps the file and retries the bucket read once
 
-## Training Optional Neural Network
-
-```bash
-MIX_ENV=preprocess mix rinha.train_nn --epochs 20
-```
-
-Trains on `references.json.gz` dataset using EXLA if available.
-Exports weights to `priv/nn_weights.bin`.
-
 ## What Is Not Used
 
 - Bloom filter cache: removed from this branch (no bloom module in runtime path).
+- Neural network and KNN scoring are not active runtime scoring paths.
 
 The implementation is correctness-first with official dataset compatibility:
 

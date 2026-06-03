@@ -17,7 +17,7 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
       --eval-sample N      Rows used for post-train accuracy check (default: 100000)
       --in-memory          Force dense Nx tensor training, unsafe for full dataset
       --external-memory    Use XGBoost external cache for the temporary LIBSVM file
-      --output PATH        Output model path (default: priv/random_forest.bin)
+      --output PATH        Output model path (default: priv/xgboost.bin)
   """
 
   use Mix.Task
@@ -74,7 +74,7 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
     file_backed? = file_backed?(opts, sample)
     external_cache? = Keyword.get(opts, :external_memory, false)
 
-    output_path = Keyword.get(opts, :output, Path.join(priv_dir(), "random_forest.bin"))
+    output_path = Keyword.get(opts, :output, Path.join(priv_dir(), "xgboost.bin"))
 
     Logger.info(
       "XGBoost training: rounds=#{rounds}, depth=#{depth}, eta=#{eta}, subsample=#{subsample}, threads=#{threads}, max_bin=#{max_bin}"

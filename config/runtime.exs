@@ -61,37 +61,15 @@ if config_env() != :test do
       _ -> true
     end
 
-  scoring_model =
-    System.get_env("SCORING_MODEL")
-    |> case do
-      "knn" -> :knn
-      "KNN" -> :knn
-      "nn" -> :nn
-      "NN" -> :nn
-      "neural" -> :nn
-      "NEURAL" -> :nn
-      "random_forest" -> :random_forest
-      "RANDOM_FOREST" -> :random_forest
-      "rf" -> :random_forest
-      "RF" -> :random_forest
-      "xgb" -> :random_forest
-      "XGB" -> :random_forest
-      "xgboost" -> :random_forest
-      "XGBOOST" -> :random_forest
-      nil -> :random_forest
-      "" -> :random_forest
-      _ -> :random_forest
-    end
-
   config :rinha,
     port: port,
     socket_path: System.get_env("SOCKET_PATH"),
     telemetry_log_interval_ms: telemetry_log_interval_ms,
     references_path: System.get_env("REFERENCES_PATH"),
+    xgboost_path: System.get_env("XGBOOST_PATH"),
     knn_probes: knn_probes,
     n3_borderline_calibration: n3_borderline_calibration,
-    knn_dynamic_probes: knn_dynamic_probes,
-    scoring_model: scoring_model
+    knn_dynamic_probes: knn_dynamic_probes
 
   # Phoenix Endpoint always listens on the TCP port.
   config :rinha, Rinha.Endpoint,

@@ -3,7 +3,7 @@ defmodule Rinha.Domain.Models.XGBoost do
   Runtime scorer for the XGBoost-trained tree ensemble.
 
   The native EXGBoost dependency is used only during preprocessing/training.
-  Runtime scoring evaluates the exported trees from `priv/random_forest.bin` in
+  Runtime scoring evaluates the exported trees from `priv/xgboost.bin` in
   pure Elixir to keep the production release dependency-free.
   """
 
@@ -18,7 +18,7 @@ defmodule Rinha.Domain.Models.XGBoost do
 
   @spec probability([integer()]) :: float()
   def probability(vector) when is_list(vector) and length(vector) == 16 do
-    store = Rinha.RandomForestStore.get()
+    store = Rinha.XGBoostStore.get()
     input = Enum.map(vector, fn v -> v / @scale end) |> List.to_tuple()
 
     predict_probability(store, input)
@@ -26,13 +26,7 @@ defmodule Rinha.Domain.Models.XGBoost do
 
   def probability(other), do: raise("XGBoost expects a 16-int query, got #{inspect(other)}")
 
-  defp predict_probability(%{kind: :random_forest} = store, input) do
-    store.trees
-    |> Enum.reduce(0.0, fn tree, acc -> acc + eval_tree(tree, input, 0) end)
-    |> Kernel./(store.tree_count)
-  end
-
-  defp predict_probability(%{kind: :boosted_logistic} = store, input) do
+  defp predict_probability(store, input) do
     margin =
       Enum.reduce(store.trees, store.base_margin, fn tree, acc ->
         acc + eval_tree(tree, input, 0)

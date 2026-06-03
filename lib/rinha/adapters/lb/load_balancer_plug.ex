@@ -10,16 +10,24 @@ defmodule Rinha.LoadBalancerPlug do
   import Plug.Conn
 
   @json_ct "application/json"
-  @rpc_timeout 1_800
+  @default_rpc_timeout_ms 120
+  @default_rpc_retry_timeout_ms 120
   @fraud_err ~s({"error":"upstream unavailable"})
 
   @impl true
-  def init(opts), do: opts
+  def init(opts) do
+    rpc_timeout_ms = env_int("LB_RPC_TIMEOUT_MS", @default_rpc_timeout_ms)
+    rpc_retry_timeout_ms = env_int("LB_RPC_RETRY_TIMEOUT_MS", @default_rpc_retry_timeout_ms)
+
+    opts
+    |> Keyword.put_new(:rpc_timeout_ms, rpc_timeout_ms)
+    |> Keyword.put_new(:rpc_retry_timeout_ms, rpc_retry_timeout_ms)
+  end
 
   @impl true
-  def call(%Plug.Conn{method: "POST", path_info: ["fraud-score"]} = conn, _opts) do
+  def call(%Plug.Conn{method: "POST", path_info: ["fraud-score"]} = conn, opts) do
     with {:ok, body, conn} <- read_full_body(conn),
-         {:ok, response} <- call_peer(:remote_score_binary, [body]) do
+         {:ok, response} <- call_peer(:remote_score_binary, [body], opts) do
       conn
       |> put_resp_content_type(@json_ct)
       |> send_resp(200, response)
@@ -39,8 +47,8 @@ defmodule Rinha.LoadBalancerPlug do
     end
   end
 
-  def call(%Plug.Conn{method: "GET", path_info: ["ready"]} = conn, _opts) do
-    case call_peer(:remote_ready?, []) do
+  def call(%Plug.Conn{method: "GET", path_info: ["ready"]} = conn, opts) do
+    case call_peer(:remote_ready?, [], opts) do
       {:ok, true} -> send_resp(conn, 200, "OK")
       _ -> send_resp(conn, 503, "NOT READY")
     end
@@ -56,7 +64,7 @@ defmodule Rinha.LoadBalancerPlug do
         ensure_connected(peer)
 
         status =
-          case rpc_call(peer, :remote_cluster_status, []) do
+          case rpc_call(peer, :remote_cluster_status, [], @default_rpc_timeout_ms) do
             {:ok, map} when is_map(map) -> Map.put(map, :reachable, true)
             _ -> %{reachable: false}
           end
@@ -90,12 +98,18 @@ defmodule Rinha.LoadBalancerPlug do
     end
   end
 
-  defp call_peer(fun, args) do
+  defp call_peer(fun, args, opts) do
+    timeout_ms = Keyword.get(opts, :rpc_timeout_ms, @default_rpc_timeout_ms)
+    retry_timeout_ms = Keyword.get(opts, :rpc_retry_timeout_ms, @default_rpc_retry_timeout_ms)
+
     Rinha.LoadBalancer.ordered_peers()
-    |> Enum.reduce_while({:error, :no_peer}, fn peer, _acc ->
+    |> Enum.with_index()
+    |> Enum.reduce_while({:error, :no_peer}, fn {peer, attempt}, _acc ->
+      per_attempt_timeout = if attempt == 0, do: timeout_ms, else: retry_timeout_ms
+
       ensure_connected(peer)
 
-      case rpc_call(peer, fun, args) do
+      case rpc_call(peer, fun, args, per_attempt_timeout) do
         {:ok, true} ->
           {:halt, {:ok, true}}
 
@@ -111,15 +125,18 @@ defmodule Rinha.LoadBalancerPlug do
         {:ok, result} when is_binary(result) ->
           {:halt, {:ok, result}}
 
-        {:error, :rpc_failed} -> {:cont, {:error, :rpc_failed}}
-        _ -> {:cont, {:error, :rpc_failed}}
+        {:error, :rpc_failed} ->
+          {:cont, {:error, :rpc_failed}}
+
+        _ ->
+          {:cont, {:error, :rpc_failed}}
       end
     end)
   end
 
-  defp rpc_call(peer, fun, args) do
+  defp rpc_call(peer, fun, args, timeout_ms) do
     try do
-      {:ok, :erpc.call(peer, Rinha.RawEndpoint, fun, args, @rpc_timeout)}
+      {:ok, :erpc.call(peer, Rinha.RawEndpoint, fun, args, timeout_ms)}
     rescue
       _ -> {:error, :rpc_failed}
     catch
@@ -130,5 +147,21 @@ defmodule Rinha.LoadBalancerPlug do
   defp ensure_connected(peer) do
     if peer in Node.list(), do: :ok, else: _ = Node.connect(peer)
     :ok
+  end
+
+  defp env_int(name, default) do
+    case System.get_env(name) do
+      nil ->
+        default
+
+      "" ->
+        default
+
+      value ->
+        case Integer.parse(value) do
+          {int, ""} when int > 0 -> int
+          _ -> default
+        end
+    end
   end
 end

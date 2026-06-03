@@ -1,0 +1,13 @@
+services:
+  api1:
+    environment:
+      KNN_PROBES: "64"
+
+  api2:
+    environment:
+      KNN_PROBES: "8"
+
+  lb:
+    environment:
+      LB_RPC_TIMEOUT_MS: "120"
+      LB_RPC_RETRY_TIMEOUT_MS: "120"

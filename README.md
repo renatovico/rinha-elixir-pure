@@ -9,14 +9,15 @@ Real-time fraud-detection API submission for [Rinha de Backend 2026](https://git
 - API hot-path is `Rinha.RawEndpoint` for `POST /fraud-score`.
 - Scoring pipeline is domain-first and correctness-first:
   1. `Rinha.Domain.Vectorization.transform/1`
-  2. `Rinha.Domain.Models.KNN.score/1`
+  2. `Rinha.Domain.Models.RandomForest.score/1` (`SCORING_MODEL=xgb`, default)
   3. `Rinha.Domain.Decision.response_for/1`
 
 ## Correctness Rules
 
 - Vectorization follows the official 14-dimension rules from `DETECTION_RULES.md`.
 - Runtime vectors are quantized to 16 signed lanes (`s16`) for fast distance scans; lanes `14` and `15` are zero pads.
-- KNN decision uses `k=5` nearest neighbors over the official reference dataset.
+- Default decision uses the exported XGBoost tree ensemble in `priv/random_forest.bin`.
+- KNN remains available with `SCORING_MODEL=knn` and uses `k=5` nearest neighbors over the official reference dataset.
 - Decision threshold is fixed: `approved = fraud_score < 0.6`.
 
 ## Architecture
@@ -41,8 +42,8 @@ flowchart LR
     API1 <-->|Erlang distribution\npeer RPC| API2
 
     subgraph ScoringPath[Per-request scoring path]
-      V[Rinha.Domain.Vectorization] --> K[Rinha.Domain.Models.KNN]
-      K --> D[Rinha.Domain.Decision]
+      V[Rinha.Domain.Vectorization] --> M[Rinha.Domain.Models.RandomForest]
+      M --> D[Rinha.Domain.Decision]
     end
 
     API1 -. uses .-> ScoringPath
@@ -58,20 +59,21 @@ flowchart LR
 
 For direct API mode (single node), `Rinha.RawEndpoint` handles `POST /fraud-score` locally.
 
-## KNN and Infrastructure Map
+## Scoring and Infrastructure Map
 
 The active scoring chain is:
 
-`Rinha.RawEndpoint` -> `Rinha.Domain.Fraud` -> `Rinha.Domain.Vectorization` -> `Rinha.Domain.Models.KNN` -> `Rinha.IvfScanner` -> `Rinha.KnnScanner` -> `Rinha.Domain.Decision`
+`Rinha.RawEndpoint` -> `Rinha.Domain.Fraud` -> `Rinha.Domain.Vectorization` -> `Rinha.Domain.Models.RandomForest` -> `Rinha.Domain.Decision`
 
 What each infrastructure module does:
 
 - `Rinha.IvfStore`: owns IVF metadata and bucket reads from `priv/ivf_index.bin` via `iommap`.
 - `Rinha.IvfScanner`: picks nearest centroids and scans only those buckets.
 - `Rinha.KnnScanner`: hot inner loop that computes distances and top-5 labels.
+- `Rinha.RandomForestStore`: loads compact XGBoost tree ensemble binaries for the default scorer.
 - `Rinha.Resources`: loads normalization constants and MCC risk map.
 
-Important: bloom filter and neural/hybrid scorer are not part of current runtime.
+Important: bloom filter is not part of current runtime. Neural and KNN scorers remain optional via `SCORING_MODEL`.
 
 ## Cluster and Health Endpoints
 
@@ -110,7 +112,8 @@ Runtime env var:
 ## Runtime Data and Limits
 
 - Official reference dataset: `resources/references.json.gz` (~48 MB compressed)
-- Indexed runtime file: `priv/ivf_index.bin`
+- Default XGBoost model file: `priv/random_forest.bin`
+- Optional KNN indexed runtime file: `priv/ivf_index.bin`
 - IVF index format: version `1`, with `k=2048`, `n=3_000_000`, `stride=16`
 - Default KNN probe budget: `12` buckets (configurable via `KNN_PROBES`)
 - Resource envelope in `docker-compose.yml`:
@@ -154,14 +157,15 @@ At build time, `resources/references.json.gz` is copied into `priv/resources/` s
 Runtime env vars:
 
 - `REFERENCES_PATH`: optional override for the references dataset file.
+- `SCORING_MODEL`: `xgb`/`random_forest` default, or `knn`, `nn`.
 - `KNN_PROBES`: IVF probe budget used by `Rinha.Domain.Models.KNN` (default `12`).
 - `N3_BORDERLINE_CALIBRATION`: enable/disable narrow `n=3 -> n=2` boundary calibration (default `true`; set `0|false|off` to disable).
 
 Cluster defaults in `docker-compose.yml`:
 
-- `KNN_PROBES` defaults to `12` for stable p99 and low HTTP errors.
-- To run high-accuracy mode locally, override on demand:
-  - `KNN_PROBES=64 N3_BORDERLINE_CALIBRATION=true make docker-cycle`
+- `SCORING_MODEL` defaults to `xgb`.
+- To run KNN locally, override on demand:
+  - `SCORING_MODEL=knn KNN_PROBES=64 N3_BORDERLINE_CALIBRATION=true make docker-cycle`
 
 IVF index I/O backend:
 

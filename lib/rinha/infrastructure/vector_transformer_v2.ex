@@ -48,10 +48,10 @@ defmodule Rinha.VectorTransformerV2 do
     norm = Rinha.Domain.ReferenceData.normalization()
     mcc_risk = Rinha.Domain.ReferenceData.mcc_risk()
 
-    transaction = payload["transaction"] || %{}
-    customer = payload["customer"] || %{}
-    merchant = payload["merchant"] || %{}
-    terminal = payload["terminal"] || %{}
+    transaction = as_map(payload["transaction"])
+    customer = as_map(payload["customer"])
+    merchant = as_map(payload["merchant"])
+    terminal = as_map(payload["terminal"])
     last_tx = normalize_last_transaction(payload["last_transaction"])
 
     amount = (transaction["amount"] || 0.0) * 1.0
@@ -60,7 +60,7 @@ defmodule Rinha.VectorTransformerV2 do
 
     avg_amount = (customer["avg_amount"] || 1.0) * 1.0
     tx_count_24h = (customer["tx_count_24h"] || 0) * 1.0
-    known_merchants = customer["known_merchants"] || []
+    known_merchants = as_list(customer["known_merchants"])
 
     merchant_id = merchant["id"]
     mcc = merchant["mcc"]
@@ -100,6 +100,14 @@ defmodule Rinha.VectorTransformerV2 do
   defp normalize_last_transaction(:null), do: nil
   defp normalize_last_transaction(last_tx) when is_map(last_tx), do: last_tx
   defp normalize_last_transaction(_), do: nil
+
+  @compile {:inline, as_map: 1, as_list: 1}
+
+  defp as_map(map) when is_map(map), do: map
+  defp as_map(_), do: %{}
+
+  defp as_list(list) when is_list(list), do: list
+  defp as_list(_), do: []
 
   defp last_transaction_lanes(nil, _requested_at, _norm), do: {-@scale, -@scale}
 

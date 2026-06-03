@@ -33,3 +33,6 @@ rinha-*.tar
 # Source dataset (~48 MB) — pulled from the official Rinha 2026 repo;
 # not tracked here.
 /priv/resources/references.json.gz
+
+# Local k6 result artifacts.
+/test/results-*.json

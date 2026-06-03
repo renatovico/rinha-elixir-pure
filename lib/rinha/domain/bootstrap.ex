@@ -7,9 +7,22 @@ defmodule Rinha.Domain.Bootstrap do
 
   @spec boot_api!() :: :ok
   def boot_api! do
-    :ok = ensure_reference_dataset!()
     Rinha.Domain.ReferenceData.load!()
-    :ok = Rinha.Domain.Index.build!()
+
+    case scoring_model() do
+      :nn ->
+        Logger.info("Using neural network scoring model")
+        :ok = Rinha.NeuralNetStore.build()
+
+      :knn ->
+        Logger.info("Using KNN scoring model")
+        :ok = ensure_reference_dataset!()
+        :ok = Rinha.Domain.Index.build!()
+
+      :random_forest ->
+        Logger.info("Using random forest scoring model")
+        :ok = Rinha.RandomForestStore.build()
+    end
 
     Logger.info("Warming up scoring with bundled fixtures...")
     warmup!()
@@ -22,11 +35,17 @@ defmodule Rinha.Domain.Bootstrap do
     synthetic = synthetic_vectors(100)
     vectors = fixture_vectors ++ synthetic
 
+    model = scoring_model()
+
     Enum.each(vectors, fn vector ->
-      _ = Rinha.Domain.Models.KNN.score(vector)
+      case model do
+        :nn -> _ = Rinha.Domain.Models.NeuralNet.score(vector)
+        :knn -> _ = Rinha.Domain.Models.KNN.score(vector)
+        :random_forest -> _ = Rinha.Domain.Models.RandomForest.score(vector)
+      end
     end)
 
-    Logger.info("Warmup done (#{length(vectors)} queries)")
+    Logger.info("Warmup done (#{length(vectors)} queries, model=#{model})")
     :ok
   end
 
@@ -69,6 +88,10 @@ defmodule Rinha.Domain.Bootstrap do
 
   defp default_reference_path do
     Path.join([:code.priv_dir(:rinha), "resources", "references.json.gz"])
+  end
+
+  defp scoring_model do
+    Application.get_env(:rinha, :scoring_model, :random_forest)
   end
 
   defp fixture_vectors do

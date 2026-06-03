@@ -37,6 +37,7 @@ defmodule Rinha.MixProject do
       {:iommap, "~> 1.1"},
       {:nx, "~> 0.12", only: :preprocess, runtime: false},
       {:exla, "~> 0.12", only: :preprocess, runtime: false},
+      {:exgboost, "~> 0.5", only: :preprocess, runtime: false},
       {:tidewave, "~> 0.4", only: :dev}
     ]
   end

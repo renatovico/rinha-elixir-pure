@@ -47,6 +47,28 @@ defmodule Rinha.VectorTransformerV2Test do
     assert Enum.at(out, 6) == -8192
   end
 
+  test ":null last_transaction => lanes 5 and 6 are -scale" do
+    payload = put_in(@legit, ["last_transaction"], :null)
+    out = V.transform(payload)
+    assert Enum.at(out, 5) == -8192
+    assert Enum.at(out, 6) == -8192
+  end
+
+  test ":null nested maps are treated as empty defaults" do
+    payload = %{
+      "transaction" => :null,
+      "customer" => :null,
+      "merchant" => :null,
+      "terminal" => :null,
+      "last_transaction" => :null
+    }
+
+    out = V.transform(payload)
+    assert length(out) == 16
+    assert Enum.at(out, 5) == -8192
+    assert Enum.at(out, 6) == -8192
+  end
+
   test "amount lane (0) matches q(amount/max_amount)" do
     out = V.transform(@legit)
     # 41.12/10000 = 0.004112, q = round(0.004112*8192) = 34

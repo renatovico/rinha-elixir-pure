@@ -28,7 +28,8 @@ defmodule Rinha.LoadBalancer do
       %{owner: ^owner, peers: peers, counter: counter} ->
         ordered_from_tuple(peers, counter)
 
-      _ -> GenServer.call(__MODULE__, :ordered_peers)
+      _ ->
+        GenServer.call(__MODULE__, :ordered_peers)
     end
   end
 
@@ -44,7 +45,8 @@ defmodule Rinha.LoadBalancer do
       %{owner: ^owner, peers: peers} ->
         Tuple.to_list(peers)
 
-      _ -> GenServer.call(__MODULE__, :peer_nodes)
+      _ ->
+        GenServer.call(__MODULE__, :peer_nodes)
     end
   end
 

@@ -41,7 +41,7 @@ defmodule Rinha.Domain.Bootstrap do
       case model do
         :nn -> _ = Rinha.Domain.Models.NeuralNet.score(vector)
         :knn -> _ = Rinha.Domain.Models.KNN.score(vector)
-        :random_forest -> _ = Rinha.Domain.Models.RandomForest.score(vector)
+        :random_forest -> _ = Rinha.Domain.Models.XGBoost.score(vector)
       end
     end)
 

@@ -32,7 +32,7 @@ defmodule Rinha.Domain.Fraud do
     case scoring_model() do
       :nn -> Rinha.Domain.Models.NeuralNet.score(vector)
       :knn -> Rinha.Domain.Models.KNN.score(vector)
-      :random_forest -> Rinha.Domain.Models.RandomForest.score(vector)
+      :random_forest -> Rinha.Domain.Models.XGBoost.score(vector)
     end
   end
 

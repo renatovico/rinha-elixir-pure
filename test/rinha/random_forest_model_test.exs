@@ -1,4 +1,4 @@
-defmodule Rinha.RandomForestModelTest do
+defmodule Rinha.XGBoostModelTest do
   use ExUnit.Case, async: false
 
   setup do
@@ -21,8 +21,8 @@ defmodule Rinha.RandomForestModelTest do
     Application.put_env(:rinha, :random_forest_path, path)
     :ok = Rinha.RandomForestStore.build()
 
-    assert Rinha.Domain.Models.RandomForest.score(List.duplicate(0, 16)) == 0
-    assert Rinha.Domain.Models.RandomForest.score([8192 | List.duplicate(0, 15)]) == 5
+    assert Rinha.Domain.Models.XGBoost.score(List.duplicate(0, 16)) == 0
+    assert Rinha.Domain.Models.XGBoost.score([8192 | List.duplicate(0, 15)]) == 5
 
     File.rm(path)
   end
@@ -35,8 +35,8 @@ defmodule Rinha.RandomForestModelTest do
     Application.put_env(:rinha, :random_forest_path, path)
     :ok = Rinha.RandomForestStore.build()
 
-    assert Rinha.Domain.Models.RandomForest.score(List.duplicate(0, 16)) == 0
-    assert Rinha.Domain.Models.RandomForest.score([8192 | List.duplicate(0, 15)]) == 5
+    assert Rinha.Domain.Models.XGBoost.score(List.duplicate(0, 16)) == 0
+    assert Rinha.Domain.Models.XGBoost.score([8192 | List.duplicate(0, 15)]) == 5
 
     File.rm(path)
   end

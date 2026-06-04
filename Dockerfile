@@ -30,7 +30,6 @@ COPY lib lib
 COPY priv priv
 COPY resources resources
 RUN mkdir -p priv/resources && cp -f resources/references.json.gz priv/resources/references.json.gz
-RUN rm -f priv/references_v2.bin
 RUN mix compile
 
 # Build release
@@ -53,6 +52,7 @@ RUN apt-get update && \
       libgcc-s1 \
       libtinfo6 \
       libssl3 \
+      libgomp1 \
       ca-certificates \
       locales && \
     rm -rf /var/lib/apt/lists/* && \

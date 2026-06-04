@@ -8,6 +8,7 @@ defmodule Rinha.Domain.Models.XGBoost do
   """
 
   @scale 8192.0
+  @deny_threshold 0.579
 
   @spec score([integer()]) :: 0..5
   def score(vector) when is_list(vector) and length(vector) == 16 do
@@ -47,10 +48,10 @@ defmodule Rinha.Domain.Models.XGBoost do
   end
 
   defp node_at({_node_count, nodes}, idx) do
-    offset = idx * 17
+    offset = idx * 25
 
-    <<_::binary-size(offset), feature::signed-little-8, threshold::little-float-32,
-      left::little-32, right::little-32, value::little-float-32, _::binary>> = nodes
+    <<_::binary-size(offset), feature::signed-little-8, threshold::little-float-64,
+      left::little-32, right::little-32, value::little-float-64, _::binary>> = nodes
 
     {feature, threshold, left, right, value}
   end
@@ -59,7 +60,7 @@ defmodule Rinha.Domain.Models.XGBoost do
 
   defp prob_to_score(prob) when prob < 0.1, do: 0
   defp prob_to_score(prob) when prob < 0.3, do: 1
-  defp prob_to_score(prob) when prob < 0.5, do: 2
+  defp prob_to_score(prob) when prob < @deny_threshold, do: 2
   defp prob_to_score(prob) when prob < 0.7, do: 3
   defp prob_to_score(prob) when prob < 0.9, do: 4
   defp prob_to_score(_prob), do: 5

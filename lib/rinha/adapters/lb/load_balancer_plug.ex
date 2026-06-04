@@ -13,6 +13,7 @@ defmodule Rinha.LoadBalancerPlug do
   @default_rpc_timeout_ms 120
   @default_rpc_retry_timeout_ms 120
   @fraud_err ~s({"error":"upstream unavailable"})
+  @local_score_key :rinha_lb_local_score_enabled
 
   @impl true
   def init(opts) do
@@ -27,7 +28,7 @@ defmodule Rinha.LoadBalancerPlug do
   @impl true
   def call(%Plug.Conn{method: "POST", path_info: ["fraud-score"]} = conn, opts) do
     with {:ok, body, conn} <- read_full_body(conn),
-         {:ok, response} <- call_peer(:remote_score_binary, [body], opts) do
+         {:ok, response} <- score_body(body, opts) do
       conn
       |> put_resp_content_type(@json_ct)
       |> send_resp(200, response)
@@ -48,10 +49,9 @@ defmodule Rinha.LoadBalancerPlug do
   end
 
   def call(%Plug.Conn{method: "GET", path_info: ["ready"]} = conn, opts) do
-    case call_peer(:remote_ready?, [], opts) do
-      {:ok, true} -> send_resp(conn, 200, "OK")
-      _ -> send_resp(conn, 503, "NOT READY")
-    end
+    status = if ready?(opts), do: 200, else: 503
+    body = if status == 200, do: "OK", else: "NOT READY"
+    send_resp(conn, status, body)
   end
 
   def call(%Plug.Conn{method: "GET", path_info: ["debug", "cluster"]} = conn, _opts) do
@@ -95,6 +95,26 @@ defmodule Rinha.LoadBalancerPlug do
       {:ok, chunk, conn} -> {:ok, IO.iodata_to_binary(Enum.reverse([chunk | acc])), conn}
       {:more, chunk, conn} -> read_full_body(conn, [chunk | acc])
       {:error, _reason} -> {:error, :read_error}
+    end
+  end
+
+  def enable_local_scoring!, do: :persistent_term.put(@local_score_key, true)
+
+  def local_scoring_enabled?, do: :persistent_term.get(@local_score_key, false)
+
+  defp ready?(opts) do
+    if local_scoring_enabled?() do
+      Rinha.Domain.Readiness.ready?()
+    else
+      match?({:ok, true}, call_peer(:remote_ready?, [], opts))
+    end
+  end
+
+  defp score_body(body, opts) do
+    if local_scoring_enabled?() and Rinha.Domain.Readiness.ready?() do
+      Rinha.RawEndpoint.remote_score_binary(body)
+    else
+      call_peer(:remote_score_binary, [body], opts)
     end
   end
 

@@ -49,6 +49,8 @@ defmodule Rinha.Application do
   end
 
   defp start_load_balancer do
+    :ok = Rinha.Domain.Bootstrap.boot_api!()
+
     lb_port =
       case System.get_env("LB_PORT") do
         nil -> 9999
@@ -87,8 +89,10 @@ defmodule Rinha.Application do
 
     case Supervisor.start_link(children, strategy: :one_for_one, name: Rinha.Supervisor) do
       {:ok, _sup} = ok ->
+        Rinha.LoadBalancerPlug.enable_local_scoring!()
+        Rinha.Domain.Readiness.mark_ready!()
         write_ready_file()
-        Logger.info("Load balancer ready on :#{lb_port} (Erlang distribution mode)")
+        Logger.info("Load balancer ready on :#{lb_port} (local scoring mode)")
         ok
 
       err ->

@@ -12,12 +12,6 @@ defmodule Rinha.Profiler do
     65_536, 131_072, 262_144, 524_288,
     1_048_576, 2_097_152, 4_194_304, 8_388_608, 16_777_216
 
-  Events recorded by default (subscribed in `start_link/1`):
-
-    * `[:rinha, :ivf, :centroid_scan]` -> `:ivf_centroid`
-    * `[:rinha, :ivf, :bucket_scan]`   -> `:ivf_bucket`
-    * `[:rinha, :ivf, :total]`         -> `:ivf_total`
-
   All values are read by `summary/0` which returns p50/p95/p99/max/mean
   per metric.  Reads are O(buckets) so they are cheap.
 
@@ -68,13 +62,9 @@ defmodule Rinha.Profiler do
   @max_idx @bucket_count + 3
   @array_size @bucket_count + 3
 
-  @metrics %{
-    [:rinha, :ivf, :centroid_scan] => :ivf_centroid,
-    [:rinha, :ivf, :bucket_scan] => :ivf_bucket,
-    [:rinha, :ivf, :total] => :ivf_total
-  }
+  @metrics %{}
 
-  @metric_order [:ivf_centroid, :ivf_bucket, :ivf_total]
+  @metric_order []
 
   @persistent_key {:rinha, :profiler_counters}
 

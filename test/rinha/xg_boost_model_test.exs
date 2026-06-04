@@ -31,8 +31,8 @@ defmodule Rinha.XGBoostModelTest do
 
   defp encode_nodes(nodes) do
     for {feature, threshold, left, right, value} <- nodes, into: <<>> do
-      <<feature::signed-little-8, threshold::little-float-32, left::little-32, right::little-32,
-        value::little-float-32>>
+      <<feature::signed-little-8, threshold::little-float-64, left::little-32, right::little-32,
+        value::little-float-64>>
     end
   end
 
@@ -43,7 +43,7 @@ defmodule Rinha.XGBoostModelTest do
       {-1, 0.0, 0, 0, 8.0}
     ]
 
-    <<"RFF2", 2::little-32, 2::unsigned-8, 0.0::little-float-32, 1::little-32,
+    <<"RFF2", 2::little-32, 2::unsigned-8, 0.0::little-float-64, 1::little-32,
       length(nodes)::little-32>> <> encode_nodes(nodes)
   end
 end

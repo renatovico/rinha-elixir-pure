@@ -111,7 +111,7 @@ defmodule Rinha.DebugRouter do
       response: Jason.decode!(response),
       latency_us: %{
         transform: t1 - t0,
-        knn: t2 - t1,
+        score: t2 - t1,
         total: t2 - t0
       }
     })

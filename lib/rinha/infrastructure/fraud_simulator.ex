@@ -75,7 +75,7 @@ defmodule Rinha.FraudSimulator do
         t0 = System.monotonic_time(:microsecond)
         vector = Rinha.Domain.Vectorization.transform(payload)
         t1 = System.monotonic_time(:microsecond)
-        n = Rinha.Domain.Models.KNN.score(vector)
+        n = Rinha.Domain.Models.XGBoost.score(vector)
         t2 = System.monotonic_time(:microsecond)
         approved = n < 3
         truthy_correct = (label == :fraud and not approved) or (label == :legit and approved)
@@ -86,7 +86,7 @@ defmodule Rinha.FraudSimulator do
           approved: approved,
           correct?: truthy_correct,
           transform_us: t1 - t0,
-          knn_us: t2 - t1,
+          score_us: t2 - t1,
           total_us: t2 - t0
         }
       end
@@ -104,7 +104,7 @@ defmodule Rinha.FraudSimulator do
 
     totals = samples |> Enum.map(& &1.total_us) |> Enum.sort()
     transforms = samples |> Enum.map(& &1.transform_us) |> Enum.sort()
-    knns = samples |> Enum.map(& &1.knn_us) |> Enum.sort()
+    scores = samples |> Enum.map(& &1.score_us) |> Enum.sort()
 
     %{
       count: n,
@@ -114,7 +114,7 @@ defmodule Rinha.FraudSimulator do
       latency: %{
         total: percentiles(totals),
         transform: percentiles(transforms),
-        knn: percentiles(knns)
+        score: percentiles(scores)
       },
       buckets: Enum.frequencies_by(samples, & &1.n)
     }

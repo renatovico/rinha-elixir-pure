@@ -82,7 +82,7 @@ defmodule Rinha.EndpointTest do
     unless :persistent_term.get(:rinha_ready, false) do
       :ok = Rinha.Domain.Bootstrap.ensure_reference_dataset!()
       Rinha.Resources.load!()
-      :ok = Rinha.Domain.Index.build!()
+      :ok = Rinha.XGBoostStore.build()
       :persistent_term.put(:rinha_ready, true)
     end
   end

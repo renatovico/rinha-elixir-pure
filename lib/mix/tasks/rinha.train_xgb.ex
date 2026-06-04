@@ -13,8 +13,9 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
       --subsample RATE     Row subsample per tree (default: 1.0)
       --threads N          XGBoost CPU threads (default: schedulers online, max 8)
       --max-bin N          Histogram bins (default: 256)
-      --sample N           Train on first N references (default: full dataset)
+      --sample N           Train on first N rows from the chosen dataset source
       --eval-sample N      Rows used for post-train accuracy check (default: 100000)
+      --dataset PATH       Labeled k6 dataset JSON (repeatable, trains from entries[*])
       --in-memory          Force dense Nx tensor training, unsafe for full dataset
       --external-memory    Use XGBoost external cache for the temporary LIBSVM file
       --output PATH        Output model path (default: priv/xgboost.bin)
@@ -56,6 +57,7 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
           max_bin: :integer,
           sample: :integer,
           eval_sample: :integer,
+          dataset: :string,
           external_memory: :boolean,
           in_memory: :boolean,
           output: :string
@@ -70,8 +72,13 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
     max_bin = Keyword.get(opts, :max_bin, 256)
     sample = Keyword.get(opts, :sample)
     eval_sample = Keyword.get(opts, :eval_sample, @default_eval_sample)
+    dataset_paths = Keyword.get_values(opts, :dataset)
 
-    file_backed? = file_backed?(opts, sample)
+    if dataset_paths != [] do
+      Rinha.Domain.ReferenceData.load!()
+    end
+
+    file_backed? = file_backed?(opts, sample, dataset_paths)
     external_cache? = Keyword.get(opts, :external_memory, false)
 
     output_path = Keyword.get(opts, :output, Path.join(priv_dir(), "xgboost.bin"))
@@ -86,7 +93,7 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
       if file_backed? do
         train_file_backed(eval_sample, train_opts, external_cache?)
       else
-        train_in_memory(sample, eval_sample, train_opts)
+        train_in_memory(sample, eval_sample, train_opts, dataset_paths)
       end
 
     acc = evaluate(booster, eval_inputs, eval_labels)
@@ -103,8 +110,9 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
     Logger.info("Done!")
   end
 
-  defp file_backed?(opts, sample) do
+  defp file_backed?(opts, sample, dataset_paths) do
     cond do
+      dataset_paths != [] -> false
       Keyword.get(opts, :in_memory, false) -> false
       Keyword.get(opts, :external_memory, false) -> true
       is_integer(sample) -> false
@@ -129,8 +137,8 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
     ]
   end
 
-  defp train_in_memory(sample, eval_sample, train_opts) do
-    {inputs, labels} = load_dataset(sample)
+  defp train_in_memory(sample, eval_sample, train_opts, dataset_paths) do
+    {inputs, labels} = load_dataset(sample, dataset_paths)
     n = length(labels)
     {fraud, legit} = count_labels(labels)
     Logger.info("Dataset: #{n} samples (#{fraud} fraud, #{legit} legit, mode=in-memory)")
@@ -197,7 +205,7 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
     end
   end
 
-  defp load_dataset(sample) do
+  defp load_dataset(sample, []) do
     data = find_references_path() |> File.read!() |> :zlib.gunzip() |> Jason.decode!()
     data = if is_integer(sample) and sample > 0, do: Enum.take(data, sample), else: data
 
@@ -209,6 +217,34 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
     end)
     |> Enum.unzip()
   end
+
+  defp load_dataset(sample, dataset_paths) do
+    data =
+      dataset_paths
+      |> Enum.flat_map(&load_labeled_payload_dataset!/1)
+      |> maybe_take_sample(sample)
+
+    data
+    |> Enum.map(fn entry ->
+      input = entry["request"] |> Rinha.Domain.Vectorization.transform() |> prepare_input()
+      label = if entry["expected_approved"] == true, do: 0.0, else: 1.0
+      {input, label}
+    end)
+    |> Enum.unzip()
+  end
+
+  defp load_labeled_payload_dataset!(path) do
+    path = Path.expand(path)
+    Logger.info("Loading labeled payload dataset from #{path}...")
+
+    case path |> File.read!() |> Jason.decode!() do
+      %{"entries" => entries} when is_list(entries) -> entries
+      other -> raise("Invalid labeled dataset at #{path}: expected %{\"entries\" => [...]} got #{inspect(other)}")
+    end
+  end
+
+  defp maybe_take_sample(data, sample) when is_integer(sample) and sample > 0, do: Enum.take(data, sample)
+  defp maybe_take_sample(data, _sample), do: data
 
   defp write_libsvm_dataset(eval_sample) do
     dir = Path.join(System.tmp_dir!(), "rinha-xgb")
@@ -275,7 +311,6 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
     |> Enum.find(fn p -> p && File.exists?(p) end) || raise "references.json.gz not found"
   end
 
-  defp prepare_input(v) when length(v) == 14, do: Enum.map(v, &scale_input/1) ++ [0.0, 0.0]
   defp prepare_input(v) when length(v) == 16, do: Enum.map(v, &scale_input/1)
   defp scale_input(x) when is_integer(x), do: x / @input_scale
   defp scale_input(x) when is_float(x), do: x
@@ -379,7 +414,7 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
       end)
 
     data =
-      <<"RFF2", 2::little-32, 2::unsigned-8, base_margin::little-float-32,
+      <<"RFF2", 2::little-32, 2::unsigned-8, base_margin::little-float-64,
         length(trees)::little-32>> <> trees_bin
 
     File.write!(path, data)
@@ -414,7 +449,7 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
     {right_nodes, right_idx} = flatten_tree(Map.fetch!(children_by_id, no), left_nodes)
 
     nodes =
-      List.replace_at(right_nodes, idx, {feature, threshold * 1.0, left_idx, right_idx, 0.0})
+       List.replace_at(right_nodes, idx, {feature, threshold * 1.0, left_idx, right_idx, 0.0})
 
     {nodes, idx}
   end
@@ -429,8 +464,8 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
 
   defp encode_nodes(nodes) do
     for {feature, threshold, left, right, value} <- nodes, into: <<>> do
-      <<feature::signed-little-8, threshold::little-float-32, left::little-32, right::little-32,
-        value::little-float-32>>
+      <<feature::signed-little-8, threshold::little-float-64, left::little-32, right::little-32,
+        value::little-float-64>>
     end
   end
 end

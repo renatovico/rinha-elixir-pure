@@ -30,47 +30,6 @@ defmodule Rinha.Domain.Bootstrap do
     :ok
   end
 
-  @spec ensure_reference_dataset!() :: :ok
-  def ensure_reference_dataset! do
-    path = reference_dataset_path()
-
-    case File.stat(path) do
-      {:ok, %{size: size}} when size > 0 ->
-        Logger.info("Reference dataset found at #{path} (#{size} bytes)")
-        :ok
-
-      {:ok, _} ->
-        raise "reference dataset is empty at #{path}"
-
-      {:error, reason} ->
-        raise "reference dataset missing at #{path} (#{inspect(reason)})"
-    end
-  end
-
-  @spec reference_dataset_path() :: String.t()
-  def reference_dataset_path do
-    configured =
-      Application.get_env(:rinha, :references_path) ||
-        System.get_env("REFERENCES_PATH")
-
-    default = default_reference_path()
-
-    cond do
-      is_binary(configured) and configured != "" ->
-        Path.expand(configured)
-
-      File.exists?(default) ->
-        default
-
-      true ->
-        Path.expand(Path.join(["resources", "references.json.gz"]))
-    end
-  end
-
-  defp default_reference_path do
-    Path.join([:code.priv_dir(:rinha), "resources", "references.json.gz"])
-  end
-
   defp fixture_vectors do
     fixtures_dir = Path.join([:code.priv_dir(:rinha), "resources", "fixtures"])
 

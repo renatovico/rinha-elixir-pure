@@ -1,19 +1,13 @@
-.PHONY: help deps compile test preprocess preprocess-refs ivf-index run smoke load debug-ready debug-profile debug-profile-reset debug-fixtures debug-score debug-simulate debug-cluster \
+.PHONY: help deps compile test train run smoke load debug-ready debug-profile debug-profile-reset debug-fixtures debug-score debug-simulate debug-cluster \
 		docker-build docker-up docker-down docker-test docker-load docker-wait-ready docker-load-official docker-load-aggressive docker-load-matrix \
 		docker-stats docker-logs docker-cycle clean distclean
 .DEFAULT_GOAL := help
 
-REFS_GZ   ?= resources/references.json.gz
-REFS_BIN  := priv/references_v2.bin
-IVF_BIN   := priv/ivf_index.bin
+XGB_BIN   := priv/xgboost.bin
 IMAGE     := renatoelias/rinha-elixir-pure:latest
 BASE_URL  ?= http://localhost:4000
 DEBUG_URL ?= $(BASE_URL)/debug
 CLUSTER_URL ?= http://localhost:9999
-
-IVF_K     ?= 2048
-IVF_ITERS ?= 15
-IVF_BATCH ?= 20000
 
 # ── Help ─────────────────────────────────────────────
 
@@ -31,26 +25,10 @@ compile: deps ## Compile the project
 test: compile ## Run ExUnit tests
 	mix test
 
-preprocess: preprocess-refs ivf-index ## Full preprocess: references.json.gz -> priv/ivf_index.bin
-
-preprocess-refs: compile ## Generate priv/references_v2.bin from references.json.gz
-	@if [ ! -f "$(REFS_GZ)" ]; then \
-		echo "Error: $(REFS_GZ) not found. Set REFS_GZ=path/to/references.json.gz"; \
-		exit 1; \
-	fi
+train: ## Train XGBoost model and export to priv/xgboost.bin
 	MIX_ENV=preprocess mix deps.get
 	MIX_ENV=preprocess mix deps.compile
-	INPUT=$(REFS_GZ) OUTPUT=$(REFS_BIN) MIX_ENV=preprocess mix run --no-start priv/build_references.exs
-
-ivf-index: $(REFS_BIN) ## Build priv/ivf_index.bin (k-means K=$(IVF_K))
-	INPUT=$(REFS_BIN) OUTPUT=$(IVF_BIN) IVF_K=$(IVF_K) IVF_ITERS=$(IVF_ITERS) IVF_BATCH=$(IVF_BATCH) \
-	  MIX_ENV=preprocess mix run --no-start priv/build_ivf_index.exs
-
-$(REFS_BIN):
-	$(MAKE) preprocess-refs
-
-$(IVF_BIN):
-	$(MAKE) ivf-index
+	MIX_ENV=preprocess mix rinha.train_xgb
 
 run: compile ## Start single dev instance (port 4000)
 	mix phx.server
@@ -160,5 +138,5 @@ docker-cycle: docker-down docker-up docker-load ## Full cycle: rebuild → load 
 clean: ## Remove build artifacts
 	rm -rf _build deps
 
-distclean: clean ## Also remove generated preprocess artifacts
-	rm -f $(REFS_BIN) $(IVF_BIN)
+distclean: clean ## Also remove generated model artifact
+	rm -f $(XGB_BIN)

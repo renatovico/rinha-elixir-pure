@@ -37,7 +37,7 @@ defmodule Rinha.XGBoostStore do
   end
 
   defp parse!(
-         <<"RFF2", version::little-32, 2::unsigned-8, base_margin::little-float-32,
+         <<"RFF2", version::little-32, 2::unsigned-8, base_margin::little-float-64,
            tree_count::little-32, rest::binary>>,
          _path
        ) do
@@ -56,7 +56,7 @@ defmodule Rinha.XGBoostStore do
   defp parse_trees(rest, 0, acc), do: {Enum.reverse(acc), rest}
 
   defp parse_trees(<<node_count::little-32, rest::binary>>, count, acc) do
-    bytes = node_count * 17
+    bytes = node_count * 25
     <<nodes_bin::binary-size(bytes), remaining::binary>> = rest
     parse_trees(remaining, count - 1, [{node_count, nodes_bin} | acc])
   end

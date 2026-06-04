@@ -1,11 +1,10 @@
 defmodule Rinha.VectorTransformerV2 do
   @moduledoc """
-  14-dimensional, int16-quantized fraud feature vectorizer.
+  Int16-quantized fraud feature vectorizer.
 
-  Vectorizes a transaction request into a 16-int (`s16`) feature vector
-  consumed by the KNN scorer.
+  Vectorizes a transaction request into a 16-int feature vector.
 
-  Output layout (16 lanes, stride matches the reference binary):
+  Output layout (16 lanes):
 
        0  amount / max_amount
        1  installments / max_installments
@@ -21,27 +20,16 @@ defmodule Rinha.VectorTransformerV2 do
       11  unknown_merchant        (Scale if merchant not in known list, else 0)
       12  mcc_risk[merchant.mcc]  (default 0.5)
       13  merchant.avg_amount / max_merchant_avg_amount
-   14,15  zero pads (kept for SIMD-friendly stride 16)
+   14,15  zero pads
 
-  Constants `@scale = 8192` and `@stride = 16`.
-
-  Returns a flat list of 16 ints (clamped to int16 range), suitable for
-  feeding into `Nx.tensor(_, type: :s16)` or any KNN that expects the
-  reference binary layout.
+  Scale constant `@scale = 8192`.
   """
 
   @scale 8192
-  @stride 16
 
   # LUTs precomputed at compile time (HourLut, DowLut)
   @hour_lut for h <- 0..23, into: %{}, do: {h, round(h / 23.0 * @scale)}
   @dow_lut for d <- 0..6, into: %{}, do: {d, round(d / 6.0 * @scale)}
-
-  @doc "Length of the output list (always 16)."
-  def stride, do: @stride
-
-  @doc "Quantization scale (8192)."
-  def scale, do: @scale
 
   @doc "Transform a fraud-score request payload into a flat list of 16 ints."
   def transform(payload) do

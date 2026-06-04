@@ -4,7 +4,7 @@ defmodule Rinha.ScoringExampleTest do
   setup_all do
     :ok = Rinha.Domain.Bootstrap.ensure_reference_dataset!()
     Rinha.Domain.ReferenceData.load!()
-    :ok = Rinha.Domain.Index.build!()
+    :ok = Rinha.XGBoostStore.build()
     :ok
   end
 

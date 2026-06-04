@@ -17,7 +17,7 @@ defmodule Mix.Tasks.Rinha.Simulate do
 
   use Mix.Task
 
-  @shortdoc "Stress the KNN scoring pipeline with synthetic payloads"
+  @shortdoc "Stress the XGBoost scoring pipeline with synthetic payloads"
 
   @impl Mix.Task
   def run(argv) do
@@ -42,7 +42,7 @@ defmodule Mix.Tasks.Rinha.Simulate do
     {:ok, _} = Application.ensure_all_started(:jason)
 
     Rinha.Domain.ReferenceData.load!()
-    :ok = Rinha.Domain.Index.build!()
+    :ok = Rinha.XGBoostStore.build()
 
     sim_opts = [fraud_bias: bias, warmup: warmup]
     sim_opts = if seed, do: [{:seed, {seed, seed + 1, seed + 2}} | sim_opts], else: sim_opts
@@ -77,7 +77,7 @@ defmodule Mix.Tasks.Rinha.Simulate do
     precision (ok):  #{percent(s.precision_legit)}
 
     latency total    min=#{us(s.latency.total.min)} p50=#{us(s.latency.total.p50)} p95=#{us(s.latency.total.p95)} p99=#{us(s.latency.total.p99)} max=#{us(s.latency.total.max)}
-    latency knn      min=#{us(s.latency.knn.min)} p50=#{us(s.latency.knn.p50)} p95=#{us(s.latency.knn.p95)} p99=#{us(s.latency.knn.p99)} max=#{us(s.latency.knn.max)}
+    latency score    min=#{us(s.latency.score.min)} p50=#{us(s.latency.score.p50)} p95=#{us(s.latency.score.p95)} p99=#{us(s.latency.score.p99)} max=#{us(s.latency.score.max)}
     latency tform    min=#{us(s.latency.transform.min)} p50=#{us(s.latency.transform.p50)} p95=#{us(s.latency.transform.p95)} p99=#{us(s.latency.transform.p99)} max=#{us(s.latency.transform.max)}
 
     fraud-neighbor distribution:

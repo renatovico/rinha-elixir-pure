@@ -5,11 +5,10 @@ defmodule Rinha do
   Domain services:
 
     * `Rinha.Domain.Fraud` - core scoring rules
-    * `Rinha.Domain.Models.KNN` - KNN model over the IVF index
+    * `Rinha.Domain.Models.XGBoost` - XGBoost tree ensemble scorer
     * `Rinha.Domain.Vectorization` - request payload vectorization
     * `Rinha.Domain.Decision` - approval/score response mapping
     * `Rinha.Domain.ReferenceData` - static resource data
-    * `Rinha.Domain.Index` - IVF index reads and lifecycle
     * `Rinha.Domain.Simulation` - synthetic data and runs
     * `Rinha.Domain.Readiness` - service readiness state
     * `Rinha.Domain.Cluster` - BEAM cluster introspection

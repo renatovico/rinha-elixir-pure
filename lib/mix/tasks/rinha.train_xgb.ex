@@ -81,7 +81,7 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
     file_backed? = file_backed?(opts, sample, dataset_paths)
     external_cache? = Keyword.get(opts, :external_memory, false)
 
-    output_path = Keyword.get(opts, :output, Path.join(priv_dir(), "model.json"))
+    output_path = Keyword.get(opts, :output, Path.join(priv_dir(), "model"))
 
     Logger.info(
       "XGBoost training: rounds=#{rounds}, depth=#{depth}, eta=#{eta}, subsample=#{subsample}, threads=#{threads}, max_bin=#{max_bin}"

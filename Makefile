@@ -25,7 +25,7 @@ compile: deps ## Compile the project
 test: compile ## Run ExUnit tests
 	mix test
 
-train: ## Train XGBoost model and export to priv/xgboost.bin
+train: ## Train XGBoost model and export to priv/model.json
 	MIX_ENV=preprocess mix deps.get
 	MIX_ENV=preprocess mix deps.compile
 	MIX_ENV=preprocess mix rinha.train_xgb
@@ -139,4 +139,4 @@ clean: ## Remove build artifacts
 	rm -rf _build deps
 
 distclean: clean ## Also remove generated model artifact
-	rm -f $(XGB_MODEL)
+	rm -f priv/model.json

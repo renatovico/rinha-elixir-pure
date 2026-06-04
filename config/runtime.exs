@@ -27,49 +27,11 @@ if config_env() != :test do
       v -> String.to_integer(v)
     end
 
-  knn_probes =
-    System.get_env("KNN_PROBES")
-    |> case do
-      nil -> 12
-      "" -> 12
-      v -> String.to_integer(v)
-    end
-
-  n3_borderline_calibration =
-    System.get_env("N3_BORDERLINE_CALIBRATION")
-    |> case do
-      nil -> true
-      "" -> true
-      "0" -> false
-      "false" -> false
-      "FALSE" -> false
-      "off" -> false
-      "OFF" -> false
-      _ -> true
-    end
-
-  knn_dynamic_probes =
-    System.get_env("KNN_DYNAMIC_PROBES")
-    |> case do
-      nil -> true
-      "" -> true
-      "0" -> false
-      "false" -> false
-      "FALSE" -> false
-      "off" -> false
-      "OFF" -> false
-      _ -> true
-    end
-
   config :rinha,
     port: port,
     socket_path: System.get_env("SOCKET_PATH"),
     telemetry_log_interval_ms: telemetry_log_interval_ms,
-    references_path: System.get_env("REFERENCES_PATH"),
-    xgboost_path: System.get_env("XGBOOST_PATH"),
-    knn_probes: knn_probes,
-    n3_borderline_calibration: n3_borderline_calibration,
-    knn_dynamic_probes: knn_dynamic_probes
+    xgboost_path: System.get_env("XGBOOST_PATH")
 
   # Phoenix Endpoint always listens on the TCP port.
   config :rinha, Rinha.Endpoint,

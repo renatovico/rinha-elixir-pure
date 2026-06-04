@@ -1,6 +1,6 @@
 defmodule Rinha.XGBoostStore do
   @moduledoc """
-  Loads the exported XGBoost tree ensemble from a compact binary file.
+  Loads and caches the EXGBoost model from disk.
   """
 
   require Logger
@@ -13,51 +13,26 @@ defmodule Rinha.XGBoostStore do
       Keyword.get(opts, :path) ||
         Application.get_env(:rinha, :xgboost_path) ||
         System.get_env("XGBOOST_PATH") ||
-        Path.join(:code.priv_dir(:rinha), "xgboost.bin")
+        Path.join(:code.priv_dir(:rinha), "model.json")
 
-    Logger.info("Loading XGBoost tree ensemble from #{path}...")
+    Logger.info("Loading XGBoost model from #{path}...")
 
-    payload = path |> File.read!() |> parse!(path)
-    :persistent_term.put(@persistent_key, payload)
+    model = EXGBoost.read_model(path)
+    :persistent_term.put(@persistent_key, model)
 
-    Logger.info("XGBoost ready: #{payload.tree_count} trees")
+    Logger.info("XGBoost model ready")
     :ok
   end
 
-  @spec get() :: map()
+  @spec get() :: EXGBoost.Booster.t()
   def get do
     case :persistent_term.get(@persistent_key, nil) do
       nil ->
         :ok = build()
         :persistent_term.get(@persistent_key)
 
-      store ->
-        store
+      model ->
+        model
     end
-  end
-
-  defp parse!(
-         <<"RFF2", version::little-32, 2::unsigned-8, base_margin::little-float-64,
-           tree_count::little-32, rest::binary>>,
-         _path
-       ) do
-    {trees, <<>>} = parse_trees(rest, tree_count, [])
-
-    %{
-      version: version,
-      base_margin: base_margin,
-      tree_count: tree_count,
-      trees: trees
-    }
-  end
-
-  defp parse!(_, path), do: raise("Invalid XGBoost model format at #{path}")
-
-  defp parse_trees(rest, 0, acc), do: {Enum.reverse(acc), rest}
-
-  defp parse_trees(<<node_count::little-32, rest::binary>>, count, acc) do
-    bytes = node_count * 25
-    <<nodes_bin::binary-size(bytes), remaining::binary>> = rest
-    parse_trees(remaining, count - 1, [{node_count, nodes_bin} | acc])
   end
 end

@@ -3,7 +3,7 @@
 		docker-stats docker-logs docker-cycle clean distclean
 .DEFAULT_GOAL := help
 
-XGB_BIN   := priv/xgboost.bin
+XGB_MODEL := priv/model.json
 IMAGE     := renatoelias/rinha-elixir-pure:latest
 BASE_URL  ?= http://localhost:4000
 DEBUG_URL ?= $(BASE_URL)/debug
@@ -139,4 +139,4 @@ clean: ## Remove build artifacts
 	rm -rf _build deps
 
 distclean: clean ## Also remove generated model artifact
-	rm -f $(XGB_BIN)
+	rm -f $(XGB_MODEL)

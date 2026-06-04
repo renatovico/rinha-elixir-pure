@@ -81,7 +81,7 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
     file_backed? = file_backed?(opts, sample, dataset_paths)
     external_cache? = Keyword.get(opts, :external_memory, false)
 
-    output_path = Keyword.get(opts, :output, Path.join(priv_dir(), "xgboost.bin"))
+    output_path = Keyword.get(opts, :output, Path.join(priv_dir(), "model.json"))
 
     Logger.info(
       "XGBoost training: rounds=#{rounds}, depth=#{depth}, eta=#{eta}, subsample=#{subsample}, threads=#{threads}, max_bin=#{max_bin}"
@@ -311,6 +311,7 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
     |> Enum.find(fn p -> p && File.exists?(p) end) || raise "references.json.gz not found"
   end
 
+  defp prepare_input(v) when length(v) == 14, do: Enum.map(v, &scale_input/1) ++ [0.0, 0.0]
   defp prepare_input(v) when length(v) == 16, do: Enum.map(v, &scale_input/1)
   defp scale_input(x) when is_integer(x), do: x / @input_scale
   defp scale_input(x) when is_float(x), do: x
@@ -397,75 +398,7 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
   defp tensor?(_), do: false
 
   defp export_booster(booster, path) do
-    trees =
-      booster
-      |> EXGBoost.Booster.get_dump(format: :json)
-      |> Enum.map(fn tree_json ->
-        tree_json |> to_string() |> Jason.decode!() |> flatten_tree()
-      end)
-
-    config = booster |> EXGBoost.dump_config() |> Jason.decode!()
-    base_score = get_in(config, ["learner", "learner_model_param", "base_score"]) |> parse_float()
-    base_margin = logit(base_score)
-
-    trees_bin =
-      Enum.map_join(trees, "", fn nodes ->
-        <<length(nodes)::little-32>> <> encode_nodes(nodes)
-      end)
-
-    data =
-      <<"RFF2", 2::little-32, 2::unsigned-8, base_margin::little-float-64,
-        length(trees)::little-32>> <> trees_bin
-
-    File.write!(path, data)
-    Logger.info("Exported #{length(trees)} boosted trees, #{byte_size(data)} bytes to #{path}")
-  end
-
-  defp flatten_tree(tree), do: elem(flatten_tree(tree, []), 0)
-
-  defp flatten_tree(%{"leaf" => value}, acc),
-    do: {acc ++ [{-1, 0.0, 0, 0, value * 1.0}], length(acc)}
-
-  defp flatten_tree(
-         %{
-           "split" => split,
-           "split_condition" => threshold,
-           "yes" => yes,
-           "no" => no,
-           "children" => children
-         },
-         acc
-       ) do
-    idx = length(acc)
-    feature = parse_feature(split)
-    children_by_id = Map.new(children, fn child -> {child["nodeid"], child} end)
-
-    {left_nodes, left_idx} =
-      flatten_tree(
-        Map.fetch!(children_by_id, yes),
-        acc ++ [{feature, threshold * 1.0, 0, 0, 0.0}]
-      )
-
-    {right_nodes, right_idx} = flatten_tree(Map.fetch!(children_by_id, no), left_nodes)
-
-    nodes =
-       List.replace_at(right_nodes, idx, {feature, threshold * 1.0, left_idx, right_idx, 0.0})
-
-    {nodes, idx}
-  end
-
-  defp parse_feature("f" <> n), do: String.to_integer(n)
-
-  defp parse_float(v) when is_float(v), do: v
-  defp parse_float(v) when is_integer(v), do: v * 1.0
-  defp parse_float(v) when is_binary(v), do: String.to_float(v)
-
-  defp logit(p), do: :math.log(p / (1.0 - p))
-
-  defp encode_nodes(nodes) do
-    for {feature, threshold, left, right, value} <- nodes, into: <<>> do
-      <<feature::signed-little-8, threshold::little-float-64, left::little-32, right::little-32,
-        value::little-float-64>>
-    end
+    EXGBoost.Booster.save(booster, path: path, overwrite: true)
+    Logger.info("Model saved to #{path}")
   end
 end

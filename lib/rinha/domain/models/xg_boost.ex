@@ -1,14 +1,9 @@
 defmodule Rinha.Domain.Models.XGBoost do
   @moduledoc """
-  Runtime scorer for the XGBoost-trained tree ensemble.
-
-  The native EXGBoost dependency is used only during preprocessing/training.
-  Runtime scoring evaluates the exported trees from `priv/xgboost.bin` in
-  pure Elixir to keep the production release dependency-free.
+  Runtime scorer using EXGBoost with EXLA CPU backend.
   """
 
   @scale 8192.0
-  @deny_threshold 0.579
 
   @spec score([integer()]) :: 0..5
   def score(vector) when is_list(vector) and length(vector) == 16 do
@@ -19,48 +14,24 @@ defmodule Rinha.Domain.Models.XGBoost do
 
   @spec probability([integer()]) :: float()
   def probability(vector) when is_list(vector) and length(vector) == 16 do
-    store = Rinha.XGBoostStore.get()
-    input = Enum.map(vector, fn v -> v / @scale end) |> List.to_tuple()
+    model = Rinha.XGBoostStore.get()
 
-    predict_probability(store, input)
+    input =
+      vector
+      |> Enum.map(&(&1 / @scale))
+      |> Nx.tensor(type: :f32)
+      |> Nx.new_axis(0)
+
+    EXGBoost.predict(model, input)
+    |> Nx.to_flat_list()
+    |> hd()
   end
 
   def probability(other), do: raise("XGBoost expects a 16-int query, got #{inspect(other)}")
 
-  defp predict_probability(store, input) do
-    margin =
-      Enum.reduce(store.trees, store.base_margin, fn tree, acc ->
-        acc + eval_tree(tree, input, 0)
-      end)
-
-    sigmoid(margin)
-  end
-
-  defp eval_tree(tree, input, idx) do
-    {feature, threshold, left, right, value} = node_at(tree, idx)
-
-    if feature < 0 do
-      value
-    else
-      next = if elem(input, feature) <= threshold, do: left, else: right
-      eval_tree(tree, input, next)
-    end
-  end
-
-  defp node_at({_node_count, nodes}, idx) do
-    offset = idx * 25
-
-    <<_::binary-size(offset), feature::signed-little-8, threshold::little-float-64,
-      left::little-32, right::little-32, value::little-float-64, _::binary>> = nodes
-
-    {feature, threshold, left, right, value}
-  end
-
-  defp sigmoid(x), do: 1.0 / (1.0 + :math.exp(-x))
-
   defp prob_to_score(prob) when prob < 0.1, do: 0
   defp prob_to_score(prob) when prob < 0.3, do: 1
-  defp prob_to_score(prob) when prob < @deny_threshold, do: 2
+  defp prob_to_score(prob) when prob < 0.5, do: 2
   defp prob_to_score(prob) when prob < 0.7, do: 3
   defp prob_to_score(prob) when prob < 0.9, do: 4
   defp prob_to_score(_prob), do: 5

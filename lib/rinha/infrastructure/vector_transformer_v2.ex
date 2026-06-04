@@ -1,8 +1,9 @@
 defmodule Rinha.VectorTransformerV2 do
   @moduledoc """
-  Int16-quantized fraud feature vectorizer.
+  Fraud feature vectorizer.
 
-  Vectorizes a transaction request into a 16-int feature vector.
+  Transforms a transaction request into a flat list of 16 scaled integers,
+  one per feature lane, clamped to the int16 range. Scale constant `@scale = 8192`.
 
   Output layout (16 lanes):
 
@@ -21,8 +22,6 @@ defmodule Rinha.VectorTransformerV2 do
       12  mcc_risk[merchant.mcc]  (default 0.5)
       13  merchant.avg_amount / max_merchant_avg_amount
    14,15  zero pads
-
-  Scale constant `@scale = 8192`.
   """
 
   @scale 8192

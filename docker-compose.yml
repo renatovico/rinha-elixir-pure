@@ -1,13 +1,12 @@
 x-api: &api
-  image: renatoelias/rinha-elixir-pure:submission-20260603-xgb2
+  build: .
+  image: renatoelias/rinha-elixir-pure:latest
   environment:
     READY_FILE: /tmp/ready
     ERL_CRASH_DUMP_SECONDS: "0"
     HTTP_ACCEPTORS: "32"
     HTTP_MAX_CONNECTIONS: "8192"
     TELEMETRY_LOG_INTERVAL_MS: "10000"
-    RELEASE_DISTRIBUTION: sname
-    RELEASE_COOKIE: rinha-secret-cookie
   healthcheck:
     test: ["CMD-SHELL", "test -f /tmp/ready"]
     interval: 2s
@@ -28,17 +27,6 @@ services:
       HTTP_ACCEPTORS: "32"
       HTTP_MAX_CONNECTIONS: "8192"
       PORT: "4000"
-      SCORING_MODEL: "${SCORING_MODEL:-xgb}"
-      KNN_PROBES: "${KNN_PROBES:-12}"
-      KNN_DYNAMIC_PROBES: "${KNN_DYNAMIC_PROBES:-true}"
-      KNN_DYNAMIC_PROBES_MIN: "${KNN_DYNAMIC_PROBES_MIN:-3}"
-      KNN_DYNAMIC_RUNQ_MID: "${KNN_DYNAMIC_RUNQ_MID:-1}"
-      KNN_DYNAMIC_RUNQ_HIGH: "${KNN_DYNAMIC_RUNQ_HIGH:-2}"
-      N3_BORDERLINE_CALIBRATION: "${N3_BORDERLINE_CALIBRATION:-true}"
-      RELEASE_DISTRIBUTION: sname
-      RELEASE_NODE: api1
-      RELEASE_COOKIE: rinha-secret-cookie
-      RINHA_PEER_NODE: api2@api2
     cpuset: "0,1"
     deploy:
       resources:
@@ -59,17 +47,6 @@ services:
       HTTP_ACCEPTORS: "32"
       HTTP_MAX_CONNECTIONS: "8192"
       PORT: "4000"
-      SCORING_MODEL: "${SCORING_MODEL:-xgb}"
-      KNN_PROBES: "${KNN_PROBES:-12}"
-      KNN_DYNAMIC_PROBES: "${KNN_DYNAMIC_PROBES:-true}"
-      KNN_DYNAMIC_PROBES_MIN: "${KNN_DYNAMIC_PROBES_MIN:-3}"
-      KNN_DYNAMIC_RUNQ_MID: "${KNN_DYNAMIC_RUNQ_MID:-1}"
-      KNN_DYNAMIC_RUNQ_HIGH: "${KNN_DYNAMIC_RUNQ_HIGH:-2}"
-      N3_BORDERLINE_CALIBRATION: "${N3_BORDERLINE_CALIBRATION:-true}"
-      RELEASE_DISTRIBUTION: sname
-      RELEASE_NODE: api2
-      RELEASE_COOKIE: rinha-secret-cookie
-      RINHA_PEER_NODE: api1@api1
     cpuset: "2,3"
     deploy:
       resources:
@@ -77,30 +54,22 @@ services:
           cpus: "0.45"
           memory: "125M"
 
-  lb:
-    <<: *api
-    container_name: rinha_pure_lb
-    hostname: lb
+  haproxy:
+    image: haproxy:lts-alpine
+    container_name: rinha_pure_haproxy
     ports:
       - "9999:9999"
-    environment:
-      RINHA_MODE: lb
-      READY_FILE: /tmp/ready
-      ERL_CRASH_DUMP_SECONDS: "0"
-      LB_RPC_TIMEOUT_MS: "120"
-      LB_RPC_RETRY_TIMEOUT_MS: "120"
-      RELEASE_DISTRIBUTION: sname
-      RELEASE_NODE: lb
-      RELEASE_COOKIE: rinha-secret-cookie
-      LB_PORT: "9999"
-      LB_ACCEPTORS: "16"
-      LB_PEER_NODES: api1@api1,api2@api2
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     depends_on:
       api1:
         condition: service_healthy
       api2:
         condition: service_healthy
     cpuset: "0,2"
+    command: ["haproxy", "-W", "-db", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+    networks:
+      - net
     deploy:
       resources:
         limits:

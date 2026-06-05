@@ -1,5 +1,4 @@
 x-api: &api
-  build: .
   image: renatoelias/rinha-elixir-pure:latest
   environment:
     READY_FILE: /tmp/ready
@@ -67,7 +66,8 @@ services:
       api2:
         condition: service_healthy
     cpuset: "0,2"
-    command: ["haproxy", "-W", "-db", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+    command:
+      ["haproxy", "-W", "-db", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
     networks:
       - net
     deploy:

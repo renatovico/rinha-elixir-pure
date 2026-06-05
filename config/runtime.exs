@@ -31,15 +31,15 @@ if config_env() != :test do
     System.get_env("APPROVE_THRESHOLD")
     |> case do
       nil ->
-        0.5
+        nil
 
       "" ->
-        0.5
+        nil
 
       value ->
         case Float.parse(value) do
           {threshold, ""} -> threshold
-          _ -> 0.5
+          _ -> nil
         end
     end
 

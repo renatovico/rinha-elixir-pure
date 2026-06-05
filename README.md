@@ -116,6 +116,8 @@ Train/export the runtime model:
 make train
 ```
 
+`make train` uses the labeled k6 datasets (`test/k6/test-data*.json`), shuffles the split deterministically, and auto-calibrates `approve_threshold` against the same detection-score formula used by the benchmark.
+
 ## Data Files
 
 Reference files shipped in this repo:
@@ -131,6 +133,7 @@ At build time, `resources/references.json.gz` is copied into `priv/resources/` s
 Runtime env vars:
 
 - `AXON_MODEL_PATH`: optional override for the exported Axon model file.
+- `APPROVE_THRESHOLD`: optional override for model-calibrated approval threshold.
 
 ## Quickstart
 

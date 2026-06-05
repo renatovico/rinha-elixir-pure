@@ -47,7 +47,7 @@ defmodule Rinha.AxonStore do
     :persistent_term.put(@persistent_key, store)
 
     Logger.info(
-      "Axon model ready (input=#{payload.config.input_size}, hidden1=#{payload.config.hidden_size_1}, hidden2=#{payload.config.hidden_size_2})"
+      "Axon model ready (input=#{payload.config.input_size}, hidden1=#{payload.config.hidden_size_1}, hidden2=#{payload.config.hidden_size_2}, approve_threshold=#{payload.config.approve_threshold})"
     )
 
     :ok

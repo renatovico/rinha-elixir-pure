@@ -11,9 +11,12 @@ defmodule Mix.Tasks.Rinha.TrainAxon do
       --learning-rate RATE Optimizer learning rate (default: 0.01)
       --hidden-size-1 N    First dense layer units (default: 256)
       --hidden-size-2 N    Second dense layer units (default: 256)
+      --seed N             Shuffle seed for train/eval split (default: 42)
       --sample N           Train on first N rows from dataset source (default: 300000)
       --eval-sample N      Rows used for post-train accuracy check (default: 100000)
       --dataset PATH       Labeled k6 dataset JSON (repeatable, trains from entries[*])
+      --approve-threshold RATE
+                           Optional fixed approval threshold (default: auto-tuned on eval split)
       --output PATH        Output model path (default: priv/model.axon)
       --max-model-mb N     Fail if saved model exceeds N MB
   """
@@ -30,8 +33,12 @@ defmodule Mix.Tasks.Rinha.TrainAxon do
   @default_learning_rate 1.0e-2
   @default_hidden_size_1 256
   @default_hidden_size_2 256
+  @default_seed 42
   @default_sample 300_000
   @default_eval_sample 100_000
+  @threshold_min 0.31
+  @threshold_max 0.95
+  @threshold_step 0.01
 
   @impl Mix.Task
   def run(args) do
@@ -47,9 +54,11 @@ defmodule Mix.Tasks.Rinha.TrainAxon do
           learning_rate: :float,
           hidden_size_1: :integer,
           hidden_size_2: :integer,
+          seed: :integer,
           sample: :integer,
           eval_sample: :integer,
-          dataset: :string,
+          dataset: :keep,
+          approve_threshold: :float,
           output: :string,
           max_model_mb: :string
         ]
@@ -60,9 +69,11 @@ defmodule Mix.Tasks.Rinha.TrainAxon do
     learning_rate = Keyword.get(opts, :learning_rate, @default_learning_rate)
     hidden_size_1 = Keyword.get(opts, :hidden_size_1, @default_hidden_size_1)
     hidden_size_2 = Keyword.get(opts, :hidden_size_2, @default_hidden_size_2)
+    seed = Keyword.get(opts, :seed, @default_seed)
     sample = Keyword.get(opts, :sample, @default_sample)
     eval_sample = Keyword.get(opts, :eval_sample, @default_eval_sample)
     dataset_paths = Keyword.get_values(opts, :dataset)
+    fixed_threshold = Keyword.get(opts, :approve_threshold)
     output_path = Keyword.get(opts, :output, Path.join(priv_dir(), "model.axon"))
     max_model_bytes = parse_max_model_bytes(opts)
 
@@ -70,7 +81,8 @@ defmodule Mix.Tasks.Rinha.TrainAxon do
       Rinha.Domain.ReferenceData.load!()
     end
 
-    {inputs, labels} = load_dataset(sample, dataset_paths)
+    {raw_inputs, raw_labels} = load_dataset(sample, dataset_paths)
+    {inputs, labels} = shuffle_dataset(raw_inputs, raw_labels, seed)
     n = length(labels)
 
     if n < 2 do
@@ -96,13 +108,11 @@ defmodule Mix.Tasks.Rinha.TrainAxon do
     )
 
     Logger.info(
-      "Axon config: epochs=#{epochs}, batch_size=#{batch_size}, learning_rate=#{learning_rate}, hidden1=#{hidden_size_1}, hidden2=#{hidden_size_2}"
+      "Axon config: epochs=#{epochs}, batch_size=#{batch_size}, learning_rate=#{learning_rate}, hidden1=#{hidden_size_1}, hidden2=#{hidden_size_2}, seed=#{seed}"
     )
 
     x_train = Nx.tensor(train_inputs, type: :f32)
     y_train = Nx.tensor(train_labels, type: :f32) |> Nx.new_axis(-1)
-    x_eval = Nx.tensor(eval_inputs, type: :f32)
-    y_eval = Nx.tensor(eval_labels, type: :f32) |> Nx.new_axis(-1)
 
     train_data =
       Stream.zip(
@@ -118,32 +128,127 @@ defmodule Mix.Tasks.Rinha.TrainAxon do
       |> Axon.Loop.trainer(:binary_cross_entropy, optimizer)
       |> Axon.Loop.run(train_data, Axon.ModelState.empty(), epochs: epochs, compiler: EXLA)
 
-    accuracy = evaluate(model, model_state, x_eval, y_eval)
+    eval_probs = predict_probabilities(model, model_state, eval_inputs, batch_size)
+    threshold_result = pick_threshold(eval_probs, eval_labels, fixed_threshold)
+    approve_threshold = threshold_result.threshold
+    accuracy = threshold_result.accuracy
 
     Logger.info(
-      "Accuracy on #{length(eval_labels)} eval rows: #{Float.round(accuracy * 100, 3)}%"
+      "Eval at threshold=#{Float.round(approve_threshold, 3)}: accuracy=#{Float.round(accuracy * 100, 3)}% fp=#{threshold_result.fp} fn=#{threshold_result.fn} failures=#{threshold_result.failures} (#{Float.round(threshold_result.failure_rate * 100, 2)}%) weighted_E=#{threshold_result.weighted_errors}"
     )
 
-    if accuracy < 0.99 do
-      Logger.warning("Training accuracy is below 99%; tune epochs/hidden sizes")
+    if threshold_result.detection_cut? do
+      Logger.warning(
+        "Detection-score cutoff would still trigger on eval split (failure rate > 15%). Tune architecture/epochs/dataset."
+      )
     end
+
+    config = Map.put(config, :approve_threshold, approve_threshold)
 
     save_payload!(output_path, config, model_state)
     enforce_model_size!(output_path, max_model_bytes)
     Logger.info("Model saved to #{output_path}")
   end
 
-  defp evaluate(model, model_state, x_eval, y_eval) do
+  defp shuffle_dataset(inputs, labels, seed) do
+    :rand.seed(:exsss, {seed, seed + 1, seed + 2})
+
+    {shuffled_inputs, shuffled_labels} =
+      inputs
+      |> Enum.zip(labels)
+      |> Enum.shuffle()
+      |> Enum.unzip()
+
+    {shuffled_inputs, shuffled_labels}
+  end
+
+  defp predict_probabilities(model, model_state, eval_inputs, batch_size) do
     {_init_fn, predict_fn} = Axon.build(model, mode: :inference)
+    compiled_predict = Nx.Defn.jit(predict_fn, compiler: EXLA)
 
-    predicted =
-      predict_fn.(model_state, x_eval)
-      |> Nx.greater_equal(0.5)
-      |> Nx.as_type(:f32)
+    eval_inputs
+    |> Enum.chunk_every(max(batch_size, 1))
+    |> Enum.flat_map(fn batch ->
+      batch
+      |> Nx.tensor(type: :f32)
+      |> then(&compiled_predict.(model_state, &1))
+      |> Nx.to_flat_list()
+    end)
+  end
 
-    Nx.equal(predicted, y_eval)
-    |> Nx.mean()
-    |> Nx.to_number()
+  defp pick_threshold(probabilities, labels, fixed_threshold) do
+    if is_nil(fixed_threshold) do
+      threshold_candidates()
+      |> Enum.map(&evaluate_threshold(probabilities, labels, &1))
+      |> Enum.max_by(fn stats ->
+        {stats.detection_score, -stats.failure_rate, -stats.weighted_errors}
+      end)
+    else
+      fixed_threshold
+      |> normalize_threshold()
+      |> then(&evaluate_threshold(probabilities, labels, &1))
+    end
+  end
+
+  defp threshold_candidates do
+    start = trunc(@threshold_min * 100)
+    stop = trunc(@threshold_max * 100)
+    step = trunc(@threshold_step * 100)
+
+    for threshold <- start..stop//step do
+      threshold / 100
+    end
+  end
+
+  defp normalize_threshold(value) when is_float(value),
+    do: min(max(value, @threshold_min), @threshold_max)
+
+  defp normalize_threshold(value) when is_integer(value), do: (value / 1) |> normalize_threshold()
+  defp normalize_threshold(_), do: 0.5
+
+  defp evaluate_threshold(probabilities, labels, threshold) do
+    {fp, fnn} =
+      Enum.zip(probabilities, labels)
+      |> Enum.reduce({0, 0}, fn {prob, label}, {fp, fnn} ->
+        approved = prob < threshold
+
+        cond do
+          label == 1.0 and approved -> {fp, fnn + 1}
+          label == 0.0 and not approved -> {fp + 1, fnn}
+          true -> {fp, fnn}
+        end
+      end)
+
+    n = length(labels)
+    failures = fp + fnn
+    weighted_errors = fp + 3 * fnn
+    epsilon = weighted_errors / n
+    failure_rate = failures / n
+    detection_cut? = failure_rate > 0.15
+
+    {detection_score, rate_component, absolute_penalty} =
+      if detection_cut? do
+        {-3000.0, nil, nil}
+      else
+        rate_component = 1000.0 * :math.log10(1 / max(epsilon, 0.001))
+        absolute_penalty = -300.0 * :math.log10(1 + weighted_errors)
+        {rate_component + absolute_penalty, rate_component, absolute_penalty}
+      end
+
+    %{
+      threshold: threshold,
+      fp: fp,
+      fn: fnn,
+      failures: failures,
+      weighted_errors: weighted_errors,
+      epsilon: epsilon,
+      failure_rate: failure_rate,
+      detection_cut?: detection_cut?,
+      detection_score: detection_score,
+      rate_component: rate_component,
+      absolute_penalty: absolute_penalty,
+      accuracy: (n - failures) / n
+    }
   end
 
   defp save_payload!(output_path, config, params) do

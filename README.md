@@ -8,14 +8,14 @@ Real-time fraud-detection API submission for [Rinha de Backend 2026](https://git
 - API hot-path is `Rinha.RawEndpoint` for `POST /fraud-score`.
 - Scoring pipeline is domain-first and correctness-first:
   1. `Rinha.Domain.Vectorization.transform/1`
-  2. `Rinha.Domain.Models.XGBoost.score/1`
+  2. `Rinha.Domain.Models.Axon.score/1`
   3. `Rinha.Domain.Decision.response_for/1`
 
 ## Correctness Rules
 
 - Vectorization follows the official 14-dimension rules from `DETECTION_RULES.md`.
 - Runtime vectors are scaled to 16 signed lanes (`s16`); lanes `14` and `15` are zero pads.
-- Decision uses the exported XGBoost model in `priv/model.json`.
+- Decision uses the exported Axon model in `priv/model.axon`.
 
 ## Architecture
 
@@ -37,7 +37,7 @@ flowchart LR
     HAProxy --> API2[api2\nRinha.Endpoint\nRinha.RawEndpoint]
 
     subgraph ScoringPath[Per-request scoring path]
-      V[Rinha.Domain.Vectorization] --> M[Rinha.Domain.Models.XGBoost]
+      V[Rinha.Domain.Vectorization] --> M[Rinha.Domain.Models.Axon]
       M --> D[Rinha.Domain.Decision]
     end
 
@@ -58,11 +58,11 @@ For direct API mode (single node), `Rinha.RawEndpoint` handles `POST /fraud-scor
 
 The active scoring chain is:
 
-`Rinha.RawEndpoint` -> `Rinha.Domain.Fraud` -> `Rinha.Domain.Vectorization` -> `Rinha.Domain.Models.XGBoost` -> `Rinha.Domain.Decision`
+`Rinha.RawEndpoint` -> `Rinha.Domain.Fraud` -> `Rinha.Domain.Vectorization` -> `Rinha.Domain.Models.Axon` -> `Rinha.Domain.Decision`
 
 What each infrastructure module does:
 
-- `Rinha.XGBoostStore`: loads compact XGBoost tree ensemble binaries for the scorer.
+- `Rinha.AxonStore`: loads serialized Axon params and compiled inference function.
 - `Rinha.Resources`: loads normalization constants and MCC risk map.
 
 Important: bloom filter, neural network scoring, and KNN scoring are not part of the active runtime path.
@@ -101,7 +101,7 @@ Runtime env var:
 ## Runtime Data and Limits
 
 - Official reference dataset: `resources/references.json.gz` (~48 MB compressed)
-- XGBoost model file: `priv/model.json`
+- Axon model file: `priv/model.axon`
 - Resource envelope in `docker-compose.yml`:
   - `api1`: `0.45 CPU`, `125 MB`
   - `api2`: `0.45 CPU`, `125 MB`
@@ -130,7 +130,7 @@ At build time, `resources/references.json.gz` is copied into `priv/resources/` s
 
 Runtime env vars:
 
-- `XGBOOST_PATH`: optional override for the exported XGBoost model file.
+- `AXON_MODEL_PATH`: optional override for the exported Axon model file.
 
 ## Quickstart
 

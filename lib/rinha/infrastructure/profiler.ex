@@ -62,9 +62,13 @@ defmodule Rinha.Profiler do
   @max_idx @bucket_count + 3
   @array_size @bucket_count + 3
 
-  @metrics %{}
+  @metrics %{
+    [:rinha, :fraud_score, :total] => :total_us,
+    [:rinha, :fraud_score, :transform] => :transform_us,
+    [:rinha, :fraud_score, :score] => :score_us
+  }
 
-  @metric_order []
+  @metric_order [:total_us, :transform_us, :score_us]
 
   @persistent_key {:rinha, :profiler_counters}
 
@@ -276,9 +280,7 @@ defmodule Rinha.Profiler do
       end)
       |> Enum.filter(fn {_name, stats} -> stats.count > 0 end)
 
-    if metrics == [] do
-      Logger.info("[telemetry] last #{format_interval(interval_ms)} no samples")
-    else
+    if metrics != [] do
       message =
         metrics
         |> Enum.map(fn {name, stats} ->

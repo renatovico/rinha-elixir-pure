@@ -27,8 +27,8 @@ if config_env() != :test do
       v -> String.to_integer(v)
     end
 
-  xgb_approve_threshold =
-    System.get_env("XGB_APPROVE_THRESHOLD")
+  approve_threshold =
+    System.get_env("APPROVE_THRESHOLD")
     |> case do
       nil ->
         0.5
@@ -47,8 +47,8 @@ if config_env() != :test do
     port: port,
     socket_path: System.get_env("SOCKET_PATH"),
     telemetry_log_interval_ms: telemetry_log_interval_ms,
-    xgboost_path: System.get_env("XGBOOST_PATH"),
-    xgb_approve_threshold: xgb_approve_threshold
+    axon_model_path: System.get_env("AXON_MODEL_PATH"),
+    approve_threshold: approve_threshold
 
   # Phoenix Endpoint always listens on the TCP port.
   config :rinha, Rinha.Endpoint,

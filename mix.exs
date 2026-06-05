@@ -36,7 +36,8 @@ defmodule Rinha.MixProject do
       {:jason, "~> 1.4"},
       {:nx, "~> 0.12"},
       {:exla, "~> 0.12"},
-      {:exgboost, "~> 0.5"},
+      {:axon, "~> 0.8"},
+      {:polaris, "~> 0.1"},
       {:tidewave, "~> 0.4", only: :dev}
     ]
   end

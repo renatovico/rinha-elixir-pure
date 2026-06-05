@@ -75,7 +75,7 @@ defmodule Rinha.FraudSimulator do
         t0 = System.monotonic_time(:microsecond)
         vector = Rinha.Domain.Vectorization.transform(payload)
         t1 = System.monotonic_time(:microsecond)
-        n = Rinha.Domain.Models.XGBoost.score(vector)
+        n = Rinha.Domain.Models.Axon.score(vector)
         t2 = System.monotonic_time(:microsecond)
         approved = n < 3
         truthy_correct = (label == :fraud and not approved) or (label == :legit and approved)

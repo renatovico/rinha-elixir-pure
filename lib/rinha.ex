@@ -5,7 +5,7 @@ defmodule Rinha do
   Domain services:
 
     * `Rinha.Domain.Fraud` - core scoring rules
-    * `Rinha.Domain.Models.XGBoost` - XGBoost tree ensemble scorer
+    * `Rinha.Domain.Models.Axon` - Axon binary classifier scorer
     * `Rinha.Domain.Vectorization` - request payload vectorization
     * `Rinha.Domain.Decision` - approval/score response mapping
     * `Rinha.Domain.ReferenceData` - static resource data

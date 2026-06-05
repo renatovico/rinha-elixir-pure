@@ -3,11 +3,14 @@
 		docker-stats docker-logs docker-cycle clean distclean
 .DEFAULT_GOAL := help
 
-XGB_MODEL := priv/model.json
-TRAIN_ROUNDS ?= 1000
-TRAIN_DEPTH ?= 20
-TRAIN_ETA ?= 1
-TRAIN_SUBSAMPLE ?= 1
+AXON_MODEL := priv/model.axon
+TRAIN_EPOCHS ?= 30
+TRAIN_HIDDEN_1 ?= 256
+TRAIN_HIDDEN_2 ?= 256
+TRAIN_BATCH_SIZE ?= 8192
+TRAIN_LEARNING_RATE ?= 0.01
+TRAIN_SAMPLE ?= 300000
+TRAIN_EVAL_SAMPLE ?= 100000
 TRAIN_MAX_MODEL_MB ?= 9
 IMAGE     := renatoelias/rinha-elixir-pure:latest
 BASE_URL  ?= http://localhost:4000
@@ -30,10 +33,10 @@ compile: deps ## Compile the project
 test: compile ## Run ExUnit tests
 	mix test
 
-train: ## Train XGBoost model and export to priv/model.json
+train: ## Train Axon model and export to priv/model.axon
 	MIX_ENV=preprocess mix deps.get
 	MIX_ENV=preprocess mix deps.compile
-	MIX_ENV=preprocess mix rinha.train_xgb --rounds $(TRAIN_ROUNDS) --depth $(TRAIN_DEPTH) --eta $(TRAIN_ETA) --subsample $(TRAIN_SUBSAMPLE) --output priv/model --max-model-mb $(TRAIN_MAX_MODEL_MB)
+	MIX_ENV=preprocess mix rinha.train_axon --epochs $(TRAIN_EPOCHS) --hidden-size-1 $(TRAIN_HIDDEN_1) --hidden-size-2 $(TRAIN_HIDDEN_2) --batch-size $(TRAIN_BATCH_SIZE) --learning-rate $(TRAIN_LEARNING_RATE) --sample $(TRAIN_SAMPLE) --eval-sample $(TRAIN_EVAL_SAMPLE) --output $(AXON_MODEL) --max-model-mb $(TRAIN_MAX_MODEL_MB)
 
 run: compile ## Start single dev instance (port 4000)
 	mix phx.server
@@ -141,4 +144,4 @@ clean: ## Remove build artifacts
 	rm -rf _build deps
 
 distclean: clean ## Also remove generated model artifact
-	rm -f priv/model.json
+	rm -f $(AXON_MODEL)

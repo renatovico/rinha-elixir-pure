@@ -8,8 +8,8 @@ defmodule Rinha.Domain.Bootstrap do
   @spec boot_api!() :: :ok
   def boot_api! do
     Rinha.Domain.ReferenceData.load!()
-    Logger.info("Using XGBoost scoring model")
-    :ok = Rinha.XGBoostStore.build()
+    Logger.info("Using Axon scoring model")
+    :ok = Rinha.AxonStore.build()
 
     Logger.info("Warming up scoring with bundled fixtures...")
     warmup!()
@@ -23,10 +23,10 @@ defmodule Rinha.Domain.Bootstrap do
     vectors = fixture_vectors ++ synthetic
 
     Enum.each(vectors, fn vector ->
-      _ = Rinha.Domain.Models.XGBoost.score(vector)
+      _ = Rinha.Domain.Models.Axon.score(vector)
     end)
 
-    Logger.info("Warmup done (#{length(vectors)} queries, model=xgboost)")
+    Logger.info("Warmup done (#{length(vectors)} queries, model=axon)")
     :ok
   end
 

@@ -21,17 +21,17 @@ This codebase follows a domain-first architecture with thin HTTP adapters.
 
 ## Scoring Pipeline
 
-`Rinha.RawEndpoint` -> `Rinha.Domain.Fraud` -> `Rinha.Domain.Vectorization` -> `Rinha.Domain.Models.XGBoost` -> `Rinha.Domain.Decision`
+`Rinha.RawEndpoint` -> `Rinha.Domain.Fraud` -> `Rinha.Domain.Vectorization` -> `Rinha.Domain.Models.Axon` -> `Rinha.Domain.Decision`
 
 - `Rinha.Domain.Vectorization`: payload -> 16-lane signed integer vector.
-- `Rinha.Domain.Models.XGBoost`: EXGBoost inference over `priv/model.json`.
+- `Rinha.Domain.Models.Axon`: Axon inference over `priv/model.axon`.
 - `Rinha.Domain.Decision`: maps score bucket (`0..5`) to JSON response.
 
 ## Infrastructure Modules
 
 - `Rinha.Resources`
 - `Rinha.VectorTransformerV2`
-- `Rinha.XGBoostStore`
+- `Rinha.AxonStore`
 - `Rinha.FraudSimulator`
 - `Rinha.Profiler`
 

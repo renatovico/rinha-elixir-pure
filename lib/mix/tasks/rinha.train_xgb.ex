@@ -1,5 +1,5 @@
 defmodule Mix.Tasks.Rinha.TrainXgb do
-  @shortdoc "Train XGBoost and export pure-Elixir tree ensemble"
+  @shortdoc "Train XGBoost and export runtime model"
   @moduledoc """
   Trains a boosted tree model with the Elixir `exgboost` preprocess dependency,
   then exports a compact binary model that runtime scores in pure Elixir.
@@ -18,7 +18,8 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
       --dataset PATH       Labeled k6 dataset JSON (repeatable, trains from entries[*])
       --in-memory          Force dense Nx tensor training, unsafe for full dataset
       --external-memory    Use XGBoost external cache for the temporary LIBSVM file
-      --output PATH        Output model path (default: priv/xgboost.bin)
+      --output PATH        Output model path base (default: priv/model, saved as .json)
+      --max-model-mb N     Fail if saved model exceeds N MB
   """
 
   use Mix.Task
@@ -60,7 +61,8 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
           dataset: :string,
           external_memory: :boolean,
           in_memory: :boolean,
-          output: :string
+          output: :string,
+          max_model_mb: :string
         ]
       )
 
@@ -82,6 +84,7 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
     external_cache? = Keyword.get(opts, :external_memory, false)
 
     output_path = Keyword.get(opts, :output, Path.join(priv_dir(), "model"))
+    max_model_bytes = parse_max_model_bytes(opts)
 
     Logger.info(
       "XGBoost training: rounds=#{rounds}, depth=#{depth}, eta=#{eta}, subsample=#{subsample}, threads=#{threads}, max_bin=#{max_bin}"
@@ -106,7 +109,8 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
       Logger.warning("Training accuracy is below 99%; try increasing --rounds or --depth")
     end
 
-    export_booster(booster, output_path)
+    saved_path = export_booster(booster, output_path)
+    enforce_model_size!(saved_path, max_model_bytes)
     Logger.info("Done!")
   end
 
@@ -399,6 +403,39 @@ defmodule Mix.Tasks.Rinha.TrainXgb do
 
   defp export_booster(booster, path) do
     EXGBoost.Booster.save(booster, path: path, overwrite: true)
-    Logger.info("Model saved to #{path}")
+    saved_path = saved_model_path(path)
+    Logger.info("Model saved to #{saved_path}")
+    saved_path
+  end
+
+  defp parse_max_model_bytes(opts) do
+    case Keyword.get(opts, :max_model_mb) do
+      nil ->
+        nil
+
+      value ->
+        case Float.parse(value) do
+          {mb, ""} when mb > 0.0 -> trunc(mb * 1024 * 1024)
+          _ -> raise("--max-model-mb must be a positive number, got: #{inspect(value)}")
+        end
+    end
+  end
+
+  defp enforce_model_size!(_path, nil), do: :ok
+
+  defp enforce_model_size!(path, max_bytes) do
+    size = File.stat!(path).size
+
+    if size > max_bytes do
+      raise(
+        "model exceeds size limit: #{size} bytes > #{max_bytes} bytes (#{Float.round(size / 1024 / 1024, 2)} MB)"
+      )
+    end
+
+    :ok
+  end
+
+  defp saved_model_path(path) do
+    if String.ends_with?(path, ".json"), do: path, else: path <> ".json"
   end
 end

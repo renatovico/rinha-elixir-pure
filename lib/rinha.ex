@@ -11,13 +11,11 @@ defmodule Rinha do
     * `Rinha.Domain.ReferenceData` - static resource data
     * `Rinha.Domain.Simulation` - synthetic data and runs
     * `Rinha.Domain.Readiness` - service readiness state
-    * `Rinha.Domain.Cluster` - BEAM cluster introspection
     * `Rinha.Domain.Telemetry` - profiling and diagnostics helpers
 
   Adapter layer:
 
     * `Rinha.Endpoint` / `Rinha.RawEndpoint`
-    * `Rinha.LoadBalancerPlug` / `Rinha.LoadBalancer`
     * `Rinha.DebugRouter`
 
   See `docs/architecture.md` for dependency boundaries.
@@ -25,7 +23,7 @@ defmodule Rinha do
   Folder layout:
 
     * `lib/rinha/domain` - business rules and use-cases
-    * `lib/rinha/adapters` - HTTP/LB/CLI boundaries
+    * `lib/rinha/adapters` - HTTP/CLI boundaries
     * `lib/rinha/infrastructure` - concrete low-level implementations
     * `lib/rinha/runtime` - OTP application wiring/bootstrap
   """

@@ -2,6 +2,8 @@ defmodule Rinha.VectorTransformerV2Test do
   use ExUnit.Case, async: false
 
   alias Rinha.VectorTransformerV2, as: V
+  @scale 8192
+  @stride 16
 
   setup_all do
     Rinha.Domain.ReferenceData.load!()
@@ -25,8 +27,10 @@ defmodule Rinha.VectorTransformerV2Test do
   }
 
   test "stride and scale are stable" do
-    assert V.stride() == 16
-    assert V.scale() == 8192
+    out = V.transform(@legit)
+    assert length(out) == @stride
+    assert Enum.max(out) <= @scale
+    assert Enum.min(out) >= -32_768
   end
 
   test "output is always 16 ints" do

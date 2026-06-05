@@ -1,147 +1,41 @@
 # Architecture
 
-This codebase follows a domain-first architecture with thin adapters.
+This codebase follows a domain-first architecture with thin HTTP adapters.
 
 ## Folder Structure
 
 - `lib/rinha/domain`
-  - Business use-cases, domain policies, and domain-facing ports.
-
+  - Business use-cases, scoring policies, and domain-facing ports.
 - `lib/rinha/adapters`
-  - Transport boundaries (HTTP, LB) and I/O adapters.
-
+  - HTTP transport adapters.
 - `lib/rinha/infrastructure`
-  - Concrete low-level implementations (storage/index/cache/model kernels).
-
+  - Concrete low-level implementations (resource loading, model store, vector transformer, profiler).
 - `lib/rinha/runtime`
-  - OTP runtime composition and startup wiring.
+  - OTP startup wiring.
 
-## Bounded Contexts
+## Runtime Topology
 
-- `Rinha.Domain.Fraud`
-  - Core use case orchestration for scoring payloads.
-  - Coordinates vectorization, model scoring, and decision rendering.
-
-- `Rinha.Domain.Models.*`
-  - `XGBoost`: pure-Elixir runtime evaluator for exported XGBoost trees.
-
-- `Rinha.Domain.Vectorization`
-  - Payload to fixed 16-lane vector conversion.
-
-- `Rinha.Domain.Decision`
-  - Maps fraud-neighbor counts (`0..5`) to API JSON decision payloads.
-
-- `Rinha.Domain.ReferenceData`
-  - Static data lifecycle and access (`normalization`, `mcc_risk`).
-
-- `Rinha.Domain.Index`
-  - IVF index lifecycle and bucket/centroid reads.
-
-- `Rinha.Domain.Cluster`
-  - Erlang distribution introspection/state snapshots.
-
-- `Rinha.Domain.Readiness`
-  - Readiness state source of truth.
-
-- `Rinha.Domain.Telemetry`
-  - Profiling stats facade and throughput helper.
-
-- `Rinha.Domain.Simulation`
-  - Synthetic payload generation and simulation runs.
-
-- `Rinha.Domain.Bootstrap`
-  - API mode startup pipeline (validate dataset, load resources, init index, warmup).
-
-## Adapter Layer
-
-- HTTP/API adapters:
-  - `Rinha.Endpoint`
-  - `Rinha.RawEndpoint`
-  - `Rinha.DebugRouter`
-
-- Load-balancer adapters:
-  - `Rinha.LoadBalancerPlug`
-  - `Rinha.LoadBalancer`
-
-- CLI/task adapters:
-  - `Mix.Tasks.Rinha.Simulate`
-
-Adapters should call domain services and avoid direct access to low-level infra modules.
-
-## Infrastructure Modules
-
-Infrastructure modules remain in place and are consumed behind domain facades:
-
-- `Rinha.Resources`
-- `Rinha.IvfStore`
-- `Rinha.VectorTransformerV2`
-- `Rinha.IvfScanner`
-- `Rinha.KnnScanner`
-- `Rinha.FraudSimulator`
-- `Rinha.Profiler`
+- `api1` and `api2` run the same Elixir app (`Rinha.Endpoint` + `Rinha.RawEndpoint`) on port `4000`.
+- HAProxy exposes port `9999` and forwards to `api1`/`api2` with HTTP health checks (`GET /ready`).
+- No Erlang cluster mode and no Elixir load-balancer process are used.
 
 ## Scoring Pipeline
 
-- Payload enters via HTTP adapter and is passed to `Rinha.Domain.Fraud`.
-- `Rinha.Domain.Vectorization` converts payload to a 16-lane signed int vector.
-- Model scoring always uses `Rinha.Domain.Models.XGBoost.score/1`.
-- `Rinha.Domain.Decision` maps fraud count (`0..5`) to the final JSON response.
+`Rinha.RawEndpoint` -> `Rinha.Domain.Fraud` -> `Rinha.Domain.Vectorization` -> `Rinha.Domain.Models.XGBoost` -> `Rinha.Domain.Decision`
 
-Call flow by module:
+- `Rinha.Domain.Vectorization`: payload -> 16-lane signed integer vector.
+- `Rinha.Domain.Models.XGBoost`: EXGBoost inference over `priv/model.json`.
+- `Rinha.Domain.Decision`: maps score bucket (`0..5`) to JSON response.
 
-- `Rinha.RawEndpoint`
-  - Reads raw body once.
-  - Calls `Rinha.Domain.Fraud.response_for_payload/1` (local API mode) or `remote_score_binary/1` via LB RPC.
+## Infrastructure Modules
 
-- `Rinha.Domain.Fraud`
-  - `transform_payload/1` -> `Rinha.Domain.Vectorization.transform/1`
-  - `score_vector/1` -> `Rinha.Domain.Models.XGBoost.score/1`
-  - `response_for_neighbors/1` -> `Rinha.Domain.Decision.response_for/1`
-
-### XGBoost Tree Ensemble (default)
-
-- `Rinha.Domain.Models.XGBoost`
-  - Evaluates compact exported XGBoost trees in pure Elixir.
-  - Dequantizes int16 runtime vectors back to normalized floats.
-  - Maps fraud probability to the `0..5` decision score.
-
+- `Rinha.Resources`
+- `Rinha.VectorTransformerV2`
 - `Rinha.XGBoostStore`
-  - Loads `priv/xgboost.bin` at boot.
-  - Keeps tree node payloads as compact binaries in `persistent_term`.
-
-- Training:
-  - `MIX_ENV=preprocess mix rinha.train_xgb --rounds 1500 --depth 10 --eta 0.08 --threads 8 --eval-sample 100000 --output priv/xgboost.bin`
-
-### KNN Index Utilities (not active request path)
-
-- `Rinha.Domain.Models.KNN`
-  - Resolves probe budget (`KNN_PROBES`, default 12)
-  - Delegates to `Rinha.IvfScanner.score/2`
-
-- `Rinha.IvfScanner`
-  - Picks top centroids from `Rinha.Domain.Index.centroids/0`
-  - Reads bucket slices from `Rinha.Domain.Index.bucket_slice/1`
-  - Uses `Rinha.KnnScanner.scan_slice/3` + `Rinha.KnnScanner.merge_topk/1`
-  - Counts fraud labels with `Rinha.KnnScanner.fraud_count/1`
-
-- `Rinha.IvfStore`
-  - Loads IVF metadata once at boot (`build/1`)
-  - Serves `centroids/0` and `bucket_slice/1` from the `ivf_index.bin` file
-  - Uses `iommap` mapped reads (`:iommap.region_binary/3`) for bucket vectors/labels
-  - On mmap read failure, remaps the file and retries the bucket read once
-
-## What Is Not Used
-
-- Bloom filter cache: removed from this branch (no bloom module in runtime path).
-- Neural network and KNN scoring are not active runtime scoring paths.
-
-The implementation is correctness-first with official dataset compatibility:
-
-- Official vectors are represented in 14 dimensions; runtime uses stride 16 with two zero pads for scan efficiency.
-- Decision semantics remain `k=5` nearest neighbors and threshold `fraud_score >= 0.6` as deny.
+- `Rinha.FraudSimulator`
+- `Rinha.Profiler`
 
 ## Dependency Rules
 
-- Domain modules may depend on infrastructure modules, but only through narrow facades when possible.
-- Adapters must depend on domain modules, not on infrastructure internals.
-- No legacy wrappers are kept; use domain modules directly.
+- Adapters call domain services (not infrastructure internals directly).
+- Domain orchestrates infrastructure usage through focused facades.

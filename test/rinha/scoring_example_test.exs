@@ -2,7 +2,6 @@ defmodule Rinha.ScoringExampleTest do
   use ExUnit.Case, async: false
 
   setup_all do
-    :ok = Rinha.Domain.Bootstrap.ensure_reference_dataset!()
     Rinha.Domain.ReferenceData.load!()
     :ok = Rinha.XGBoostStore.build()
     :ok

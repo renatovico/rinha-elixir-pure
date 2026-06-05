@@ -4,8 +4,7 @@ Real-time fraud-detection API submission for [Rinha de Backend 2026](https://git
 
 ## What This Actually Runs
 
-- Two API BEAM nodes (`api1`, `api2`) behind an Elixir load-balancer node (`lb`).
-- LB forwards HTTP requests over Erlang distribution (`:erpc`) to API nodes (not TCP proxying).
+- Two API BEAM nodes (`api1`, `api2`) behind HAProxy (`haproxy`).
 - API hot-path is `Rinha.RawEndpoint` for `POST /fraud-score`.
 - Scoring pipeline is domain-first and correctness-first:
   1. `Rinha.Domain.Vectorization.transform/1`
@@ -15,16 +14,15 @@ Real-time fraud-detection API submission for [Rinha de Backend 2026](https://git
 ## Correctness Rules
 
 - Vectorization follows the official 14-dimension rules from `DETECTION_RULES.md`.
-- Runtime vectors are quantized to 16 signed lanes (`s16`) for fast distance scans; lanes `14` and `15` are zero pads.
-- Decision uses the exported XGBoost tree ensemble in `priv/xgboost.bin`.
-- Decision threshold is fixed: `approved = fraud_score < 0.6`.
+- Runtime vectors are scaled to 16 signed lanes (`s16`); lanes `14` and `15` are zero pads.
+- Decision uses the exported XGBoost model in `priv/model.json`.
 
 ## Architecture
 
 Current code is organized by layers under `lib/rinha/`:
 
 - `domain/` - business rules and use-cases
-- `adapters/` - HTTP and LB boundaries
+- `adapters/` - HTTP boundaries
 - `infrastructure/` - concrete implementations (cache/index/models)
 - `runtime/` - OTP application wiring
 
@@ -34,11 +32,9 @@ Detailed boundaries and dependency rules are documented in `docs/architecture.md
 
 ```mermaid
 flowchart LR
-    Client[Client / k6] -->|HTTP :9999| LB[lb\nRinha.LoadBalancerPlug\nErlang RPC round-robin]
-    LB --> API1[api1\nRinha.Endpoint\nRinha.RawEndpoint]
-    LB --> API2[api2\nRinha.Endpoint\nRinha.RawEndpoint]
-
-    API1 <-->|Erlang distribution\npeer RPC| API2
+    Client[Client / k6] -->|HTTP :9999| HAProxy[haproxy]
+    HAProxy --> API1[api1\nRinha.Endpoint\nRinha.RawEndpoint]
+    HAProxy --> API2[api2\nRinha.Endpoint\nRinha.RawEndpoint]
 
     subgraph ScoringPath[Per-request scoring path]
       V[Rinha.Domain.Vectorization] --> M[Rinha.Domain.Models.XGBoost]
@@ -51,10 +47,10 @@ flowchart LR
 
 ## Request Flow
 
-1. LB receives `POST /fraud-score` on `:9999`.
-2. LB forwards request payload to selected API node with `:erpc.call/5` (`Rinha.LoadBalancerPlug`).
+1. HAProxy receives `POST /fraud-score` on `:9999`.
+2. HAProxy forwards request to one API node (`api1` or `api2`).
 3. API node decodes payload in `Rinha.RawEndpoint` and executes domain scoring.
-4. Response JSON is returned directly from API node through LB back to client.
+4. Response JSON is returned through HAProxy back to client.
 
 For direct API mode (single node), `Rinha.RawEndpoint` handles `POST /fraud-score` locally.
 
@@ -73,8 +69,7 @@ Important: bloom filter, neural network scoring, and KNN scoring are not part of
 
 ## Cluster and Health Endpoints
 
-- Public readiness via LB: `GET /ready` (on `:9999`).
-- Cluster debug via LB: `GET /debug/cluster`.
+- Public readiness via HAProxy: `GET /ready` (on `:9999`).
 - API debug routes (non-prod builds):
   - `GET /debug/ready`
   - `GET /debug/profile`
@@ -90,9 +85,7 @@ Profiler module: `Rinha.Profiler`.
 
 Tracked telemetry metrics:
 
-- `ivf_centroid`
-- `ivf_bucket`
-- `ivf_total`
+- profiler summaries exposed by `Rinha.Profiler` (see `/debug/profile`)
 
 Two ways to read telemetry:
 
@@ -108,32 +101,20 @@ Runtime env var:
 ## Runtime Data and Limits
 
 - Official reference dataset: `resources/references.json.gz` (~48 MB compressed)
-- XGBoost model file: `priv/xgboost.bin`
+- XGBoost model file: `priv/model.json`
 - Resource envelope in `docker-compose.yml`:
   - `api1`: `0.45 CPU`, `125 MB`
   - `api2`: `0.45 CPU`, `125 MB`
-  - `lb`: `0.10 CPU`, `100 MB`
+  - `haproxy`: `0.10 CPU`, `100 MB`
   - total: `1.00 CPU`, `350 MB`
 
-## Index Preprocess
+## Model Training
 
-Generate the runtime index from the official references dataset:
+Train/export the runtime model:
 
 ```bash
-# Full pipeline (references.json.gz -> priv/ivf_index.bin)
-make preprocess
-
-# Optional split steps
-make preprocess-refs
-make ivf-index
+make train
 ```
-
-Optional parameters:
-
-- `REFS_GZ=/path/to/references.json.gz` overrides source dataset path.
-- `IVF_K=2048` number of centroids.
-- `IVF_ITERS=15` k-means iterations.
-- `IVF_BATCH=20000` k-means batch size.
 
 ## Data Files
 
@@ -149,16 +130,7 @@ At build time, `resources/references.json.gz` is copied into `priv/resources/` s
 
 Runtime env vars:
 
-- `REFERENCES_PATH`: optional override for the references dataset file.
 - `XGBOOST_PATH`: optional override for the exported XGBoost model file.
-
-Cluster defaults in `docker-compose.yml`:
-
-- The Docker cluster uses the XGBoost scorer only.
-
-IVF index I/O backend:
-
-- Runtime uses `iommap` only (no `:file.pread` fallback path in the scorer).
 
 ## Quickstart
 
@@ -178,7 +150,7 @@ make debug-profile-reset
 COUNT=1000 make debug-simulate
 make debug-profile
 
-# Cluster smoke via LB (:9999)
+# Stack smoke via HAProxy (:9999)
 make docker-test
 ```
 
@@ -186,10 +158,10 @@ make docker-test
 
 Current targets from `Makefile`:
 
-- `deps`, `compile`, `test`, `preprocess`, `preprocess-refs`, `ivf-index`, `run`
+- `deps`, `compile`, `test`, `train`, `run`
 - `smoke`, `load`
 - `debug-ready`, `debug-profile`, `debug-profile-reset`
-- `debug-fixtures`, `debug-score`, `debug-simulate`, `debug-cluster`
+- `debug-fixtures`, `debug-score`, `debug-simulate`
 - `docker-build`, `docker-up`, `docker-down`, `docker-test`, `docker-load`
 - `docker-stats`, `docker-logs`, `docker-cycle`, `clean`, `distclean`
 

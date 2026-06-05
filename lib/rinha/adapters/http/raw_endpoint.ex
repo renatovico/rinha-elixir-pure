@@ -58,13 +58,6 @@ defmodule Rinha.RawEndpoint do
 
   @compile {:inline, put_resp_header_fast: 2, local_score: 1}
 
-  @spec remote_score_binary(binary()) :: {:ok, String.t()} | {:error, :bad_json}
-  def remote_score_binary(body) when is_binary(body), do: score_response_binary(body)
-  def remote_score_binary(_), do: {:error, :bad_json}
-
-  def remote_ready?, do: Rinha.Domain.Readiness.ready?()
-  def remote_cluster_status, do: Rinha.Domain.Cluster.status_snapshot()
-
   defp score_response_binary(body) do
     case decode_payload(body) do
       {:ok, payload} -> {:ok, local_score(payload)}

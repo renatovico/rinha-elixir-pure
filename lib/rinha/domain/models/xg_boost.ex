@@ -4,6 +4,7 @@ defmodule Rinha.Domain.Models.XGBoost do
   """
 
   @scale 8192.0
+  @default_approve_threshold 0.5
 
   @spec score([integer()]) :: 0..5
   def score(vector) when is_list(vector) and length(vector) == 16 do
@@ -31,8 +32,21 @@ defmodule Rinha.Domain.Models.XGBoost do
 
   defp prob_to_score(prob) when prob < 0.1, do: 0
   defp prob_to_score(prob) when prob < 0.3, do: 1
-  defp prob_to_score(prob) when prob < 0.5, do: 2
-  defp prob_to_score(prob) when prob < 0.7, do: 3
-  defp prob_to_score(prob) when prob < 0.9, do: 4
-  defp prob_to_score(_prob), do: 5
+
+  defp prob_to_score(prob) do
+    approve_threshold =
+      Application.get_env(:rinha, :xgb_approve_threshold, @default_approve_threshold)
+      |> clamp_approve_threshold()
+
+    cond do
+      prob < approve_threshold -> 2
+      prob < 0.7 -> 3
+      prob < 0.9 -> 4
+      true -> 5
+    end
+  end
+
+  defp clamp_approve_threshold(value) when is_float(value), do: min(max(value, 0.31), 0.69)
+  defp clamp_approve_threshold(value) when is_integer(value), do: value / 1 |> clamp_approve_threshold()
+  defp clamp_approve_threshold(_), do: @default_approve_threshold
 end

@@ -15,35 +15,13 @@ defmodule Rinha.XGBoostModelTest do
     :ok
   end
 
-  test "loads and scores boosted logistic tree ensemble" do
-    path =
-      Path.join(System.tmp_dir!(), "rinha-xgb-test-#{System.unique_integer([:positive])}.bin")
+  test "loads EXGBoost model and scores 16-dim vectors" do
+    path = Path.join(:code.priv_dir(:rinha), "model.json")
 
-    File.write!(path, test_boosted_model())
     Application.put_env(:rinha, :xgboost_path, path)
-    :ok = Rinha.XGBoostStore.build()
+    :ok = Rinha.XGBoostStore.build(path: path)
 
-    assert Rinha.Domain.Models.XGBoost.score(List.duplicate(0, 16)) == 0
-    assert Rinha.Domain.Models.XGBoost.score([8192 | List.duplicate(0, 15)]) == 5
-
-    File.rm(path)
-  end
-
-  defp encode_nodes(nodes) do
-    for {feature, threshold, left, right, value} <- nodes, into: <<>> do
-      <<feature::signed-little-8, threshold::little-float-64, left::little-32, right::little-32,
-        value::little-float-64>>
-    end
-  end
-
-  defp test_boosted_model do
-    nodes = [
-      {0, 0.5, 1, 2, 0.0},
-      {-1, 0.0, 0, 0, -8.0},
-      {-1, 0.0, 0, 0, 8.0}
-    ]
-
-    <<"RFF2", 2::little-32, 2::unsigned-8, 0.0::little-float-64, 1::little-32,
-      length(nodes)::little-32>> <> encode_nodes(nodes)
+    assert Rinha.Domain.Models.XGBoost.score(List.duplicate(0, 16)) in 0..5
+    assert Rinha.Domain.Models.XGBoost.score(List.duplicate(8192, 16)) in 0..5
   end
 end

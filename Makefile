@@ -1,9 +1,14 @@
-.PHONY: help deps compile test train run smoke load debug-ready debug-profile debug-profile-reset debug-fixtures debug-score debug-simulate debug-cluster \
+.PHONY: help deps compile test train run smoke load debug-ready debug-profile debug-profile-reset debug-fixtures debug-score debug-simulate \
 		docker-build docker-up docker-down docker-test docker-load docker-wait-ready docker-load-official docker-load-aggressive docker-load-matrix \
 		docker-stats docker-logs docker-cycle clean distclean
 .DEFAULT_GOAL := help
 
 XGB_MODEL := priv/model.json
+TRAIN_ROUNDS ?= 1000
+TRAIN_DEPTH ?= 20
+TRAIN_ETA ?= 1
+TRAIN_SUBSAMPLE ?= 1
+TRAIN_MAX_MODEL_MB ?= 9
 IMAGE     := renatoelias/rinha-elixir-pure:latest
 BASE_URL  ?= http://localhost:4000
 DEBUG_URL ?= $(BASE_URL)/debug
@@ -28,7 +33,7 @@ test: compile ## Run ExUnit tests
 train: ## Train XGBoost model and export to priv/model.json
 	MIX_ENV=preprocess mix deps.get
 	MIX_ENV=preprocess mix deps.compile
-	MIX_ENV=preprocess mix rinha.train_xgb
+	MIX_ENV=preprocess mix rinha.train_xgb --rounds $(TRAIN_ROUNDS) --depth $(TRAIN_DEPTH) --eta $(TRAIN_ETA) --subsample $(TRAIN_SUBSAMPLE) --output priv/model --max-model-mb $(TRAIN_MAX_MODEL_MB)
 
 run: compile ## Start single dev instance (port 4000)
 	mix phx.server
@@ -68,27 +73,24 @@ debug-simulate: ## Run debug simulator (COUNT, BIAS, WARMUP optional)
 	  -H "content-type: application/json" \
 	  -d "{\"count\":$${count},\"fraud_bias\":$${bias},\"warmup\":$${warmup}}"
 
-debug-cluster: ## Check cluster status via LB debug endpoint
-	curl -sS "$(CLUSTER_URL)/debug/cluster"
-
 # ── Cluster (docker compose, port 9999) ──────────────
 
 docker-build: ## Build the prod image
 	docker compose build
 
-docker-up: ## Start the cluster (api1 + api2 + lb)
+docker-up: ## Start the stack (api1 + api2 + haproxy)
 	docker compose up -d --build
 	@echo ""
 	@echo "Cluster up: http://localhost:9999"
-	@echo "  api1: cpuset 0,1  (:4000, cluster scorer)"
-	@echo "  api2: cpuset 2,3  (:4000, cluster scorer)"
-	@echo "  lb:    cpuset 0,2  (:9999, Erlang RPC load balancer)"
+	@echo "  api1: cpuset 0,1  (:4000)"
+	@echo "  api2: cpuset 2,3  (:4000)"
+	@echo "  haproxy: cpuset 0,2 (:9999)"
 
 docker-down: ## Stop the cluster
 	docker compose down
 
 docker-stats: ## Live stats for the cluster
-	docker stats --no-stream rinha_pure_api1 rinha_pure_api2 rinha_pure_lb
+	docker stats --no-stream rinha_pure_api1 rinha_pure_api2 rinha_pure_haproxy
 
 docker-logs: ## Follow logs for the cluster
 	docker compose logs -f --tail 100
@@ -101,7 +103,7 @@ docker-load: docker-up ## k6 load test against the cluster (Rinha submission run
 	@$(MAKE) docker-wait-ready
 	k6 run -e BASE_URL=$(CLUSTER_URL) test/k6/test.js
 
-docker-wait-ready: ## Wait until LB /ready returns 2xx
+docker-wait-ready: ## Wait until HAProxy /ready returns 2xx
 	@echo "Waiting for instances to become healthy..."
 	@ok=0; \
 	for i in $$(seq 1 60); do \
